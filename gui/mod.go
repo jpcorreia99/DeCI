@@ -45,6 +45,23 @@ func main() {
 		return
 	}
 
+	code := `
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	fmt.Println("hello!!")
+}
+	`
+	_, err = node1.Compute([]byte(code), nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	err = node1.Stop()
 	if err != nil {
 		fmt.Println(err)
