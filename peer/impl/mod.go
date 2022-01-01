@@ -25,6 +25,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	searchStorer := newConcurrentSearchResultsStore()
 	searchMap := newConcurrentSearchMap()
 	paxosController := newPaxosController(conf)
+	computationManager := newComputationManager()
 
 	node := &node{
 		running:            uint32(0),
@@ -42,6 +43,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		searchStorer:       searchStorer,
 		searchMap:          searchMap,
 		paxosController:    paxosController,
+		computationManager: computationManager,
 	}
 
 	// adding itself to the routing table
@@ -62,6 +64,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	node.registry.RegisterMessageCallback(types.PaxosPromiseMessage{}, node.PaxosPromiseMessageCallback)
 	node.registry.RegisterMessageCallback(types.PaxosAcceptMessage{}, node.PaxosAcceptMessageCallback)
 	node.registry.RegisterMessageCallback(types.TLCMessage{}, node.TlCMessageCallback)
+	node.registry.RegisterMessageCallback(types.AvailabilityQueryMessage{}, node.AvailabilityQueryMessageCallback)
+	node.registry.RegisterMessageCallback(types.AvailabilityResponseMessage{}, node.AvailabilityResponseMessageCallback)
 	return node
 }
 
@@ -85,6 +89,7 @@ type node struct {
 	searchStorer       *concurrentSearchResultsStore // used in the SearchAll function to store the files returned
 	searchMap          *concurrentSearchMap          // used in the SearchFirst function to store channels responsible to signal a valid file
 	paxosController    *paxosController
+	computationManager *computationManager
 }
 
 // Start implements peer.Service

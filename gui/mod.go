@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/cs438/transport/udp"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
+	"os"
 	"time"
 )
 
@@ -45,18 +46,15 @@ func main() {
 		return
 	}
 
-	code := `
-package main
+	code, err := os.ReadFile("executables/cracker.py")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-import (
-	"fmt"
-)
+	data, err := os.ReadFile("executables/data.txt")
 
-func main() {
-	fmt.Println("hello!!")
-}
-	`
-	_, err = node1.Compute([]byte(code), nil)
+	_, err = node2.Compute(code, data)
 	if err != nil {
 		fmt.Println(err)
 		return
