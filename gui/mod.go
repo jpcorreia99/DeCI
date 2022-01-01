@@ -26,6 +26,23 @@ func main() {
 	node1.AddPeer("127.0.0.1:54321")
 	node2.AddPeer("127.0.0.1:12345")
 	node2.AddPeer("127.0.0.1:55555")
+	err := node1.Start()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = node2.Start()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = node3.Start()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	chat := types.ChatMessage{
 		Message: "Hello from node 1",
