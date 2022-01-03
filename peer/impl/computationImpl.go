@@ -20,20 +20,8 @@ import (
 // input the cost of the computation, the computation's id and the list of nodes that participated in the computation
 
 func (n *node) Compute(executable []byte, data []byte) ([]byte, error) {
-
-	// --------- STEP ----------
-	// sending the availability queries
-	budget := uint(6)
-	requestID := xid.New().String()
-	err := n.sendBudgetedAvailabilityQueries(requestID, budget)
-	if err != nil {
-		return nil, err
-	}
-
-	time.Sleep(5 * time.Second)
-	fmt.Println("xd")
-	return nil, nil
-
+	//TODO: erro quando o budget é superior ao numero de nodos - 1
+	//TODO: erro quando o budget é superior ao numero de dados
 	filename, err := saveExecutable(executable)
 	if err != nil {
 		return nil, err
@@ -55,6 +43,30 @@ func (n *node) Compute(executable []byte, data []byte) ([]byte, error) {
 	println(costPerUnit)
 	fmt.Println(results) // todo: não está a dar print de tudo
 	println(len(remainingData))
+
+	// --------- STEP ----------
+	// sending the availability queries
+	budget := uint(20)
+	requestID := xid.New().String()
+	err = n.sendBudgetedAvailabilityQueries(requestID, budget)
+	if err != nil {
+		return nil, err
+	}
+
+	time.Sleep(5 * time.Second)
+	responses := n.computationManager.getAvailableNodes(requestID)
+	fmt.Println("numero de respostas: ", len(responses))
+
+	requestID = xid.New().String()
+	err = n.sendBudgetedAvailabilityQueries(requestID, budget)
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(5 * time.Second)
+	responses = n.computationManager.getAvailableNodes(requestID)
+	fmt.Println("numero de respostas: ", len(responses))
+
+	//TODO: resolver problema em que recebo confirmação do meu próprio nodo
 	return nil, nil
 
 	/*for _, line := range remainingData {
@@ -179,7 +191,7 @@ func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) er
 			if err != nil {
 				return err
 			}
-
+			fmt.Println("sending to", neighbourAddress)
 			err = n.socket.Send(neighbourAddress, pkt, 0)
 			if err != nil {
 				return err
@@ -205,7 +217,7 @@ func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) er
 			if err != nil {
 				return err
 			}
-
+			fmt.Println("sending to", neighbourAddress)
 			err = n.socket.Send(neighbourAddress, pkt, 0)
 			if err != nil {
 				return err
@@ -218,9 +230,10 @@ func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) er
 
 func (n *node) createAvailabilityQueryPacket(requestID string, budget uint, peerAddress string, origin string) (transport.Packet, error) {
 	availabilityRequest := types.AvailabilityQueryMessage{
-		RequestID: requestID,
-		Source:    origin,
-		Budget:    budget,
+		RequestID:      requestID,
+		Source:         origin,
+		Budget:         budget,
+		AlreadyVisited: map[string]bool{origin: true},
 	}
 
 	availabilityRequestMarshaled, err := n.registry.MarshalMessage(availabilityRequest)

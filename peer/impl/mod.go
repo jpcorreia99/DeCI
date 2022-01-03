@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/registry"
@@ -99,11 +100,13 @@ func (n *node) Start() error {
 	go n.mainReadingRoutine()
 
 	if n.configuration.AntiEntropyInterval > 0 {
+		fmt.Println("x")
 		n.wg.Add(1)
 		go n.antiEntropyMechanism()
 	}
 
 	if n.configuration.HeartbeatInterval > 0 {
+		fmt.Println("d")
 		n.wg.Add(1)
 		go n.heartbeatMechanism()
 	}
@@ -126,7 +129,9 @@ func (n *node) Stop() error {
 	n.ackMap.closeAllChannels()
 	n.requestMap.closeAllChannels()
 	n.searchMap.closeAllChannels()
+	fmt.Println("\\")
 	n.wg.Wait()
+	fmt.Println("/")
 	return err
 }
 
@@ -135,7 +140,7 @@ func (n *node) mainReadingRoutine() {
 	defer n.wg.Done()
 
 	for atomic.LoadUint32(&n.running) == 1 {
-		pkt, err := n.socket.Recv(time.Second * 1)
+		pkt, err := n.socket.Recv(time.Millisecond * 200)
 
 		if errors.Is(err, transport.TimeoutErr(0)) {
 			continue
@@ -146,8 +151,8 @@ func (n *node) mainReadingRoutine() {
 		}
 
 		n.wg.Add(1)
+		fmt.Println(".")
 		go n.handlePacket(pkt)
-		//n.handlePacket(pkt)
 	}
 }
 

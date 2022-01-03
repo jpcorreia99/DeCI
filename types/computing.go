@@ -40,7 +40,7 @@ func (a AvailabilityResponseMessage) Name() string {
 
 // String implements types.Message.
 func (a AvailabilityResponseMessage) String() string {
-	return fmt.Sprintf("{availabilityresponse %d - %d}", a.RequestID, a.CurrentBalance)
+	return fmt.Sprintf("{availabilityresponse %d}", a.RequestID)
 }
 
 // HTML implements types.Message.

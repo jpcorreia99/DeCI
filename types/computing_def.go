@@ -12,7 +12,9 @@ type AvailabilityQueryMessage struct {
 	// Source is the address of the peer that sends the query
 	Source string
 
-	Budget uint
+	Budget uint // number of nodes needed for a computation
+
+	AlreadyVisited map[string]bool // map indicating which nodes have already been visited, used to avoid sending spreading requests to already visited nodes
 }
 
 // AvailabilityResponseMessage defines a message a node send back to the originator of the query, indicating it is available for computation
@@ -21,8 +23,14 @@ type AvailabilityQueryMessage struct {
 // - implemented for project
 type AvailabilityResponseMessage struct {
 	RequestID string
-	// how much the node has in their balance
-	CurrentBalance int //TODO: this can maybe be derived from the blockchain
+}
+
+// ComputationCancellationMessage defines a message the node that requested the computation must send if it didn't manage
+// to gather sufficient resources to perform the wanted computation
+// ex: node A wants work divided in 3 nodes, but only gets 2 answers, being insufficient.
+// Since these nodes are reserved, they must be told they can be available again
+type ComputationCancellationMessage struct {
+	RequestID string
 }
 
 // TODO: não enviar o pedido para a source
