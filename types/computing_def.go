@@ -25,18 +25,27 @@ type AvailabilityResponseMessage struct {
 	RequestID string
 }
 
-// ComputationCancellationMessage defines a message the node that requested the computation must send if it didn't manage
+// ReservationCancellationMessage defines a message the node that requested the computation must send if it didn't manage
 // to gather sufficient resources to perform the wanted computation
 // ex: node A wants work divided in 3 nodes, but only gets 2 answers, being insufficient.
 // Since these nodes are reserved, they must be told they can be available again
-type ComputationCancellationMessage struct {
+type ReservationCancellationMessage struct {
 	RequestID string
 }
 
-// TODO: não enviar o pedido para a source
-// TODO: os nodos devem ter um mapa de requests a que já responderam, para não responder duplicadamente
-// TODO: what happens if the whole network alreayd received the requests/or is occupied? is the packet just dropped? USe ttl?
-//TODO: sending budget can be very large, only remove as many as how many responses you got
+// ComputationOrderMessage defines an order to execute the given executble with the given inputs
+type ComputationOrderMessage struct {
+	RequestID  string // to avoid hijacking other nodes
+	Executable []byte
+	Inputs     []string
+}
+
+// ComputationResultMessage defines the result of a remote computation
+type ComputationResultMessage struct {
+	RequestID string // to avoid hijacking other nodes
+	Results   map[string]string
+}
+
 // TODO: o budged to availability Query é removido do guito de uma pessoa
 // computation proposal e computation refusal + timeout
 // todo: como evitar spam de requesições para roubar nodos: enviar o pedido em si tem um custo

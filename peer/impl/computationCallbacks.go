@@ -1,10 +1,11 @@
 package impl
 
 import (
-	"fmt"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
+	"os/exec"
+	"strings"
 )
 
 // tries reserving this computer to execute a future computation
@@ -36,11 +37,8 @@ func (n *node) AvailabilityQueryMessageCallback(msg types.Message, _ transport.P
 		if err != nil {
 			return err
 		}
-		fmt.Println("enviei resposta de volta")
 
 		availabilityQueryMsg.Budget--
-	} else {
-		fmt.Println("problema, já está reservado")
 	}
 
 	if shouldBeForwarded {
@@ -49,8 +47,6 @@ func (n *node) AvailabilityQueryMessageCallback(msg types.Message, _ transport.P
 		if err != nil {
 			return err
 		}
-	} else {
-		fmt.Println("não dei forward :o")
 	}
 
 	return nil
@@ -61,12 +57,77 @@ func (n *node) AvailabilityResponseMessageCallback(msg types.Message, pkt transp
 	if !ok {
 		return xerrors.Errorf("Conversion to AvailabilityResponseMessage failed")
 	}
-	fmt.Println("received response:", availabilityResponseMsg, "from: ", pkt.Header.Source)
-	n.computationManager.registerResponse(availabilityResponseMsg.RequestID, pkt.Header.Source)
+
+	n.computationManager.registerAvailability(availabilityResponseMsg.RequestID, pkt.Header.Source)
 	return nil
 }
 
-// send availability queries to neighbours that have not yet been visited
+func (n *node) ReservationCancellationMessageCallback(msg types.Message, _ transport.Packet) error {
+	reservationCancellationMsg, ok := msg.(*types.ReservationCancellationMessage)
+	if !ok {
+		return xerrors.Errorf("Conversion to ReservationCancellationMessage failed")
+	}
+
+	n.computationManager.cancelReservation(reservationCancellationMsg.RequestID)
+
+	return nil
+}
+
+func (n *node) ComputationOrderMessageCallback(msg types.Message, pkt transport.Packet) error {
+	computationOrderMsg, ok := msg.(*types.ComputationOrderMessage)
+	if !ok {
+		return xerrors.Errorf("Conversion to ComputationOrderMessage failed")
+	}
+
+	requestID := computationOrderMsg.RequestID
+	idWasPromised := n.computationManager.wasIdPromised(requestID)
+	if !idWasPromised {
+		return nil
+	}
+
+	executable := computationOrderMsg.Executable
+	inputs := computationOrderMsg.Inputs
+
+	filename, err := saveExecutable(executable)
+	if err != nil {
+		return err
+	}
+
+	//TODO: later add measuring time for budget
+	answerMap := make(map[string]string)
+	for _, line := range inputs {
+		codeArgs := strings.Split(line, ",")
+		app := "python"
+		args := make([]string, 0, 1+len(codeArgs))
+		args = append(args, filename)
+		args = append(args, codeArgs...)
+		output, err := exec.Command(app, args...).Output()
+		if err != nil {
+			return err
+		}
+		answerMap[line] = string(output)
+	}
+
+	pktToSend, err := n.createComputationResultPacket(requestID, answerMap, pkt.Header.Source)
+	if err != nil {
+		return err
+	}
+
+	err = n.socket.Send(pkt.Header.Source, pktToSend, 0)
+	return err
+}
+
+func (n *node) ComputationResultMessageCallback(msg types.Message, _ transport.Packet) error {
+	computationResultMsg, ok := msg.(*types.ComputationResultMessage)
+	if !ok {
+		return xerrors.Errorf("Conversion to ComputationResultMessage failed")
+	}
+
+	n.computationManager.storeResults(computationResultMsg.RequestID, computationResultMsg.Results)
+	return nil
+}
+
+// send availability queries to the neighbours that have not yet been visited
 func (n *node) spreadAvailabilityQuery(msg types.AvailabilityQueryMessage) error {
 	neighbourList := n.routingTable.getNeighboursList()
 	var nonVisitedNeighbourList []string
@@ -146,4 +207,23 @@ func (n *node) adaptAvailabilityQueryPacket(msg types.AvailabilityQueryMessage, 
 		Header: &availabilityRequestHeader,
 		Msg:    &availabilityRequestMarshaled,
 	}, nil
+}
+
+func (n *node) createComputationResultPacket(requestID string, results map[string]string, peerAddress string) (transport.Packet, error) {
+	computationResult := types.ComputationResultMessage{
+		RequestID: requestID,
+		Results:   results,
+	}
+
+	computationResultMarshaled, err := n.registry.MarshalMessage(computationResult)
+	if err != nil {
+		return transport.Packet{}, err
+	}
+
+	computationResultHeader := transport.NewHeader(n.socket.GetAddress(), n.socket.GetAddress(), peerAddress, 0)
+	return transport.Packet{
+		Header: &computationResultHeader,
+		Msg:    &computationResultMarshaled,
+	}, nil
+
 }

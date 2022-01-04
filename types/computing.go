@@ -17,7 +17,7 @@ func (a AvailabilityQueryMessage) Name() string {
 
 // String implements types.Message.
 func (a AvailabilityQueryMessage) String() string {
-	return fmt.Sprintf("{availabilityquery %d - %d - %d}", a.RequestID, a.Source, a.Budget)
+	return fmt.Sprintf("{availabilityquery %s - %s - %d}", a.RequestID, a.Source, a.Budget)
 }
 
 // HTML implements types.Message.
@@ -40,10 +40,79 @@ func (a AvailabilityResponseMessage) Name() string {
 
 // String implements types.Message.
 func (a AvailabilityResponseMessage) String() string {
-	return fmt.Sprintf("{availabilityresponse %d}", a.RequestID)
+	return fmt.Sprintf("{availabilityresponse %s}", a.RequestID)
 }
 
 // HTML implements types.Message.
 func (a AvailabilityResponseMessage) HTML() string {
 	return a.String()
+}
+
+// -----------------------------------------------------------------------------
+// ReservationCancellationMessage
+
+// NewEmpty implements types.Message.
+func (r ReservationCancellationMessage) NewEmpty() Message {
+	return &ReservationCancellationMessage{}
+}
+
+// Name implements types.Message.
+func (r ReservationCancellationMessage) Name() string {
+	return "reservationcancellation"
+}
+
+// String implements types.Message.
+func (r ReservationCancellationMessage) String() string {
+	return fmt.Sprintf("{reservationcancellation %d}", r.RequestID)
+}
+
+// HTML implements types.Message.
+func (r ReservationCancellationMessage) HTML() string {
+	return r.String()
+}
+
+// -----------------------------------------------------------------------------
+// ComputationOrderMessage
+
+// NewEmpty implements types.Message.
+func (c ComputationOrderMessage) NewEmpty() Message {
+	return &ComputationOrderMessage{}
+}
+
+// Name implements types.Message.
+func (c ComputationOrderMessage) Name() string {
+	return "computationorder"
+}
+
+// String implements types.Message.
+func (c ComputationOrderMessage) String() string {
+	return fmt.Sprintf("{computationorder %s}", c.RequestID)
+}
+
+// HTML implements types.Message.
+func (c ComputationOrderMessage) HTML() string {
+	return c.String()
+}
+
+// -----------------------------------------------------------------------------
+// ComputationResultMessage
+
+// NewEmpty implements types.Message.
+func (c ComputationResultMessage) NewEmpty() Message {
+	return &ComputationResultMessage{}
+}
+
+// Name implements types.Message.
+func (c ComputationResultMessage) Name() string {
+	return "computationresult"
+}
+
+// String implements types.Message.
+func (c ComputationResultMessage) String() string {
+	return fmt.Sprintf("{computationresult %s}", c.RequestID)
+}
+
+// HTML implements types.Message.
+func (c ComputationResultMessage) HTML() string {
+	return c.String()
 }

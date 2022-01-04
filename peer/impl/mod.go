@@ -49,7 +49,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// adding itself to the routing table
 	node.routingTable.addPair(node.socket.GetAddress(), node.socket.GetAddress())
-
+	// register callbacks
 	node.registry.RegisterMessageCallback(types.ChatMessage{}, node.ChatMessageCallback)
 	node.registry.RegisterMessageCallback(types.EmptyMessage{}, node.EmptyMessageCallback)
 	node.registry.RegisterMessageCallback(types.StatusMessage{}, node.StatusMessageCallback)
@@ -67,6 +67,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	node.registry.RegisterMessageCallback(types.TLCMessage{}, node.TlCMessageCallback)
 	node.registry.RegisterMessageCallback(types.AvailabilityQueryMessage{}, node.AvailabilityQueryMessageCallback)
 	node.registry.RegisterMessageCallback(types.AvailabilityResponseMessage{}, node.AvailabilityResponseMessageCallback)
+	node.registry.RegisterMessageCallback(types.ReservationCancellationMessage{}, node.ReservationCancellationMessageCallback)
+	node.registry.RegisterMessageCallback(types.ComputationOrderMessage{}, node.ComputationOrderMessageCallback)
+	node.registry.RegisterMessageCallback(types.ComputationResultMessage{}, node.ComputationResultMessageCallback)
 	return node
 }
 
@@ -129,9 +132,7 @@ func (n *node) Stop() error {
 	n.ackMap.closeAllChannels()
 	n.requestMap.closeAllChannels()
 	n.searchMap.closeAllChannels()
-	fmt.Println("\\")
 	n.wg.Wait()
-	fmt.Println("/")
 	return err
 }
 
@@ -151,7 +152,6 @@ func (n *node) mainReadingRoutine() {
 		}
 
 		n.wg.Add(1)
-		fmt.Println(".")
 		go n.handlePacket(pkt)
 	}
 }

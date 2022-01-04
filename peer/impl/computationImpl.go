@@ -5,6 +5,7 @@ import (
 	"github.com/rs/xid"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"golang.org/x/xerrors"
 	"math"
 	"math/rand"
 	"os"
@@ -17,56 +18,82 @@ import (
 // todo: when we send a computation, also send the info about payment,
 // if the payment was too far from reality, cost more or less
 // todo: sort inputs to prevent sketchy order
+// TODO: how to prevent attacks where nodes are reserved without being left
 // input the cost of the computation, the computation's id and the list of nodes that participated in the computation
 
-func (n *node) Compute(executable []byte, data []byte) ([]byte, error) {
-	//TODO: erro quando o budget é superior ao numero de nodos - 1
-	//TODO: erro quando o budget é superior ao numero de dados
+func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
+	// todo: maybe wait for paxos to finish
+	if numberOfRequestedNodes > n.configuration.TotalPeers-1 {
+		return nil, xerrors.Errorf("Number of nodes to request above total number of nodes: %v - %v ",
+			numberOfRequestedNodes, n.configuration.TotalPeers-1)
+	}
+
+	requestID := xid.New().String()
+
+	// --------- STEP ----------
+	// save the executable, split the input data and estimate the cost of computing per unit
+	// also register on the computation manager the first resuls and retrieve the channel to
 	filename, err := saveExecutable(executable)
 	if err != nil {
 		return nil, err
 	}
 
-	inputData := splitData(data)
+	inputData := splitData(inputs)
 	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, inputData)
+	print("Cost per unit: ", costPerUnit)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("not error")
+
 	results := make(map[string]string)
 	for i := 0; i < len(alreadyCalculatedResults); i++ {
 		results[inputData[i]] = alreadyCalculatedResults[i]
 	}
 
-	// remove form the data the ones already calculated
-	remainingData := inputData[len(alreadyCalculatedResults):]
-	println(costPerUnit)
-	fmt.Println(results) // todo: não está a dar print de tudo
-	println(len(remainingData))
+	computationConclusionChannel := n.computationManager.registerComputation(requestID, uint(len(inputData)))
+	n.computationManager.storeResults(requestID, results)
+
+	// remove from the inputs the ones already calculated
+	remainingInputs := inputData[len(alreadyCalculatedResults):]
 
 	// --------- STEP ----------
 	// sending the availability queries
-	budget := uint(20)
-	requestID := xid.New().String()
-	err = n.sendBudgetedAvailabilityQueries(requestID, budget)
+
+	err = n.sendBudgetedAvailabilityQueries(requestID, numberOfRequestedNodes)
 	if err != nil {
 		return nil, err
 	}
 
 	time.Sleep(5 * time.Second)
-	responses := n.computationManager.getAvailableNodes(requestID)
-	fmt.Println("numero de respostas: ", len(responses))
+	availableNodes := n.computationManager.getAvailableNodes(requestID)
+	fmt.Println("numero de respostas: ", len(availableNodes))
+	if uint(len(availableNodes)) < numberOfRequestedNodes {
+		err = n.sendReservationCancellationMessages(requestID, availableNodes)
+		return nil, xerrors.Errorf("Unable to reserve enough nodes. Desired nodes %v, obtained nodes %v",
+			numberOfRequestedNodes, len(availableNodes))
+	}
 
-	requestID = xid.New().String()
-	err = n.sendBudgetedAvailabilityQueries(requestID, budget)
+	// --------- STEP ----------
+	// divide the work among the proposed nodes and send them computation orders
+
+	var inputsPerNode [][]string = make([][]string, len(availableNodes))
+	i := 0
+	for j := 0; j < len(remainingInputs); j++ {
+		i = i % len(availableNodes)
+		inputsPerNode[i] = append(inputsPerNode[i], remainingInputs[j])
+		i++
+	}
+	for i, inputList := range inputsPerNode {
+		fmt.Println(i, inputList)
+	}
+	err = n.sendComputationOrders(requestID, executable, availableNodes, inputsPerNode)
 	if err != nil {
 		return nil, err
 	}
-	time.Sleep(5 * time.Second)
-	responses = n.computationManager.getAvailableNodes(requestID)
-	fmt.Println("numero de respostas: ", len(responses))
 
-	//TODO: resolver problema em que recebo confirmação do meu próprio nodo
+	remoteComputationsResults := <-computationConclusionChannel
+	fmt.Println(remoteComputationsResults)
+	fmt.Println(len(remoteComputationsResults))
 	return nil, nil
 
 	/*for _, line := range remainingData {
@@ -87,7 +114,7 @@ func (n *node) Compute(executable []byte, data []byte) ([]byte, error) {
 	return nil, nil*/
 }
 
-// saves the executable code as a go file
+// saves the executable code as a file
 // returns filename
 func saveExecutable(executable []byte) (string, error) {
 	code := string(executable)
@@ -225,6 +252,59 @@ func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) er
 		}
 	}
 
+	return nil
+}
+
+// tells every reserved node to free up their resources
+func (n *node) sendReservationCancellationMessages(requestID string, addressList []string) error {
+	for _, destinationAddress := range addressList {
+		reservationCancellation := types.ReservationCancellationMessage{
+			RequestID: requestID,
+		}
+
+		reservationCancellationMarshaled, err := n.registry.MarshalMessage(reservationCancellation)
+		if err != nil {
+			return err
+		}
+
+		reservationCancellationHeader := transport.NewHeader(n.socket.GetAddress(), n.socket.GetAddress(), destinationAddress, 0)
+		pkt := transport.Packet{
+			Header: &reservationCancellationHeader,
+			Msg:    &reservationCancellationMarshaled,
+		}
+		fmt.Println("sent cancellation to ", destinationAddress)
+		err = n.socket.Send(destinationAddress, pkt, 0)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// send a computation order to each of the promised nodes with the inputs they should process
+func (n *node) sendComputationOrders(requestID string, executable []byte, availableNodes []string, inputsPerNode [][]string) error {
+	for i, nodeAddress := range availableNodes {
+		computationOrder := types.ComputationOrderMessage{
+			RequestID:  requestID,
+			Executable: executable,
+			Inputs:     inputsPerNode[i],
+		}
+
+		computationOrderMarshaled, err := n.registry.MarshalMessage(computationOrder)
+		if err != nil {
+			return err
+		}
+		computationOrdeHeader := transport.NewHeader(n.socket.GetAddress(), n.socket.GetAddress(), nodeAddress, 0)
+		pkt := transport.Packet{
+			Header: &computationOrdeHeader,
+			Msg:    &computationOrderMarshaled,
+		}
+		err = n.socket.Send(nodeAddress, pkt, 0)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

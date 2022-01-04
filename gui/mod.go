@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var totalNumberOfPeers = uint(3)
+var totalNumberOfPeers = uint(10)
 var count = uint(0)
 
 func main() {
@@ -47,22 +47,22 @@ func main() {
 		}
 	}
 
-	code, err := os.ReadFile("executables/cracker.py")
+	code, err := os.ReadFile("executables/dupper.py")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	data, err := os.ReadFile("executables/data.txt")
+	data, err := os.ReadFile("executables/numbers.txt")
 
-	_, err = nodeList[0].Compute(code, data)
+	_, err = nodeList[0].Compute(code, data, 9)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
 	for i := 0; i < 10; i++ {
-		fmt.Println(i)
+		fmt.Println("closing ", i)
 		err := nodeList[i].Stop()
 		if err != nil {
 			fmt.Println(err)
@@ -143,7 +143,7 @@ func main3() {
 
 	data, err := os.ReadFile("executables/data.txt")
 
-	_, err = node2.Compute(code, data)
+	_, err = node2.Compute(code, data, 3)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -199,7 +199,7 @@ func createPeer(address string) peer.Peer {
 		//AntiEntropyInterval: 6 * time.Second,
 		AntiEntropyInterval: 0,
 		//HeartbeatInterval: 5 * time.Second,
-		//HeartbeatInterval: 0,
+		HeartbeatInterval: 0,
 		AckTimeout:        3 * time.Second,
 		ContinueMongering: 0.5,
 
