@@ -42,6 +42,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		searchStorer:       searchStorer,
 		searchMap:          searchMap,
 		paxosController:    paxosController,
+		localBudget:        int(conf.InitialBudget),
 	}
 
 	// adding itself to the routing table
@@ -85,6 +86,7 @@ type node struct {
 	searchStorer       *concurrentSearchResultsStore // used in the SearchAll function to store the files returned
 	searchMap          *concurrentSearchMap          // used in the SearchFirst function to store channels responsible to signal a valid file
 	paxosController    *paxosController
+	localBudget        int
 }
 
 // Start implements peer.Service

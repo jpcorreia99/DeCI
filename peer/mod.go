@@ -14,6 +14,7 @@ type Peer interface {
 	Messaging
 	DataSharing
 	Computing
+	Budgeting
 }
 
 // Factory is the type of function we are using to create new instances of
@@ -80,6 +81,8 @@ type Configuration struct {
 	// retries to send a prepare when it doesn't get enough promises or accepts.
 	// Default: 5s.
 	PaxosProposerRetry time.Duration
+
+	InitialBudget uint
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

@@ -2,6 +2,8 @@ package unit
 
 import (
 	"encoding/hex"
+	"fmt"
+	"github.com/rs/xid"
 	"math/rand"
 	"os"
 	"sync"
@@ -23,24 +25,52 @@ import (
 func Test_HW3_Tag_Alone(t *testing.T) {
 	transp := channel.NewTransport()
 
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithPaxosID(1))
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithPaxosID(1))
 	defer node1.Stop()
 
-	err := node1.Tag("a", "b")
-	require.NoError(t, err)
+	//err := node1.Tag("a", "b")
+	//require.NoError(t, err)
 
 	// > no messages have been sent
+	//
+	//ins := node1.GetIns()
+	//require.Len(t, ins, 0)
 
-	ins := node1.GetIns()
-	require.Len(t, ins, 0)
-
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(0), z.WithPaxosID(1))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithPaxosID(2))
 	defer node2.Stop()
 
 	// > no messages have been sent
 
-	ins = node2.GetIns()
-	require.Len(t, ins, 0)
+	node1.AddPeer(node2.GetAddr())
+
+	participantAmountMap := make(map[string]int)
+	participantAmountMap[node1.GetAddr()] = -1
+	participantAmountMap[node2.GetAddr()] = 1
+
+	err := node1.UpdateBudget(xid.New().String(), participantAmountMap)
+	require.NoError(t, err)
+
+	namingStore := node1.GetStorage().GetNamingStore()
+
+	namingStore.ForEach(func(key string, val []byte) bool {
+		fmt.Printf("Key : %v Value : %v", key, string(val))
+		return true
+	})
+
+	participantAmountMap = make(map[string]int)
+	participantAmountMap[node1.GetAddr()] = 3
+	participantAmountMap[node2.GetAddr()] = -3
+
+	err = node1.UpdateBudget(xid.New().String(), participantAmountMap)
+	require.NoError(t, err)
+
+	namingStore.ForEach(func(key string, val []byte) bool {
+		fmt.Printf("Key : %v Value : %v\n", key, string(val))
+		return true
+	})
+
+	//ins = node2.GetIns()
+	//require.Len(t, ins, 0)
 }
 
 // 3-2
