@@ -114,6 +114,7 @@ func (n *node) ComputationOrderMessageCallback(msg types.Message, pkt transport.
 	}
 
 	err = n.socket.Send(pkt.Header.Source, pktToSend, 0)
+	n.computationManager.cancelReservation(requestID)
 	return err
 }
 

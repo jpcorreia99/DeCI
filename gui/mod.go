@@ -26,6 +26,7 @@ func main() {
 		stringAddress := "127.0.0.1:" + strconv.Itoa(address+i)
 		println(stringAddress)
 		peer := createPeer(stringAddress)
+		defer peer.Stop()
 		nodeList = append(nodeList, peer)
 	}
 
@@ -57,6 +58,7 @@ func main() {
 
 	start := time.Now()
 	_, err = nodeList[0].Compute(code, data, 10)
+
 	elapsed := time.Since(start)
 	fmt.Println("duration: ", elapsed.Seconds())
 	if err != nil {
@@ -64,14 +66,14 @@ func main() {
 		return
 	}
 
-	for i := 0; i < totalNumberOfPeers; i++ {
+	/*for i := 0; i < totalNumberOfPeers; i++ {
 		fmt.Println("closing ", i)
 		err := nodeList[i].Stop()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-	}
+	}*/
 }
 func main3() {
 	node1 := createPeer("127.0.0.1:12345")

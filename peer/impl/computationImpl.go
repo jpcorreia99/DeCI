@@ -15,11 +15,7 @@ import (
 	"time"
 )
 
-// TODO: select statement quando se está à espera de receber avaialiblity queries
-// caso dê timeout -> enviar cancellation request
 // de qualquer maneira ter também um timeout no lado dos outros nodes
-// TODO: generalizar os comandos, em vez de ser python run, poder enviar isso na computação
-
 // if the payment was too far from reality, cost more or less
 // TODO: how to prevent attacks where nodes are reserved without being left
 // input the cost of the computation, the computation's id and the list of nodes that participated in the computation
