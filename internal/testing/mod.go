@@ -317,7 +317,7 @@ func NewTestNode(t *testing.T, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
-
+	config.InitialBudget = 10
 	node := f(config)
 
 	require.Equal(t, len(template.messages), len(template.handlers))

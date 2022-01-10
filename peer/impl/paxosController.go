@@ -3,6 +3,8 @@ package impl
 import (
 	"crypto"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/types"
@@ -209,7 +211,34 @@ func (pc *paxosController) addBlock(block types.BlockchainBlock, peer *node) err
 	namingStore := peer.configuration.Storage.GetNamingStore()
 	namingStore.Set(block.Value.Filename, []byte(block.Value.Metahash))
 
+	participantAmountMap, err := decodeMapFromString(block.Value.Metahash)
+
+	if err != nil {
+		return nil
+	}
+
+	computationCost, ok := participantAmountMap[peer.configuration.Socket.GetAddress()]
+
+	if ok {
+		peer.localBudget += computationCost // I expect the computation cost to be negative if I started the computation
+		fmt.Printf("At %v, received computation with ID %v, I am a participant, updating my budget to %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
+	} else {
+		fmt.Printf("At %v, received computation with ID %v, I am not a participant, my budget is %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
+	}
+
 	return nil
+}
+
+func decodeMapFromString(s string) (map[string]int, error) {
+	decodedMap := make(map[string]int)
+
+	err := json.Unmarshal([]byte(s), &decodedMap)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return decodedMap, nil
 }
 
 func (pc *paxosController) getAgreedValueChannel() chan types.PaxosValue {

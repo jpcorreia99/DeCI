@@ -94,14 +94,20 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	fmt.Println("2st phase: ", elapsed.Seconds())
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
-	var inputsPerNode [][]string = make([][]string, len(availableNodes))
+	var inputsPerNodeArray [][]string = make([][]string, len(availableNodes))
 	i := 0
 	for j := 0; j < len(remainingInputs); j++ {
 		i = i % len(availableNodes)
-		inputsPerNode[i] = append(inputsPerNode[i], remainingInputs[j])
+		inputsPerNodeArray[i] = append(inputsPerNodeArray[i], remainingInputs[j])
 		i++
 	}
-	err = n.sendComputationOrders(requestID, executable, availableNodes, inputsPerNode)
+
+	inputsPerNode := make(map[string][]string)
+	for i, address := range availableNodes {
+		inputsPerNode[address] = inputsPerNodeArray[i]
+	}
+
+	err = n.sendComputationOrders(requestID, executable, inputsPerNode)
 	if err != nil {
 		return nil, err
 	}
@@ -118,24 +124,8 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	}
 	elapsed = time.Since(start)
 	fmt.Println("4th phase: ", elapsed.Seconds())
+
 	return []byte(sb.String()), nil
-
-	/*for _, line := range remainingData {
-		codeArgs := strings.Split(line, ",")
-		app := "python"
-		args := make([]string, 0, 1+len(codeArgs))
-		args = append(args, filename)
-		args = append(args, codeArgs...)
-		fmt.Println(args)
-		output, err := exec.Command(app, args...).Output()
-		if err != nil {
-			fmt.Println(":(")
-			return nil, err
-		}
-		fmt.Print("output ", string(output))
-	}
-
-	return nil, nil*/
 }
 
 // saves the executable code as a file
@@ -310,12 +300,12 @@ func (n *node) sendReservationCancellationMessages(requestID string, addressList
 }
 
 // send a computation order to each of the promised nodes with the inputs they should process
-func (n *node) sendComputationOrders(requestID string, executable []byte, availableNodes []string, inputsPerNode [][]string) error {
-	for i, nodeAddress := range availableNodes {
+func (n *node) sendComputationOrders(requestID string, executable []byte, inputsPerNode map[string][]string) error {
+	for nodeAddress, inputs := range inputsPerNode {
 		computationOrder := types.ComputationOrderMessage{
 			RequestID:  requestID,
 			Executable: executable,
-			Inputs:     inputsPerNode[i],
+			Inputs:     inputs,
 		}
 
 		computationOrderMarshaled, err := n.registry.MarshalMessage(computationOrder)

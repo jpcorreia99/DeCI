@@ -45,6 +45,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		searchMap:          searchMap,
 		paxosController:    paxosController,
 		computationManager: computationManager,
+		localBudget:        int(conf.InitialBudget),
 	}
 
 	// adding itself to the routing table
@@ -94,6 +95,7 @@ type node struct {
 	searchMap          *concurrentSearchMap          // used in the SearchFirst function to store channels responsible to signal a valid file
 	paxosController    *paxosController
 	computationManager *computationManager
+	localBudget        int
 }
 
 // Start implements peer.Service
