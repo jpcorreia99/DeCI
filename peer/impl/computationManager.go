@@ -9,26 +9,30 @@ type computationManager struct {
 	requestBeingServed string // id of the computation that reserved the node -> not used by computations issued by the node, only for the ones received from external sources
 	// this is used to stop propagating queries of the same id which have lower budgets, since they'll never reach as far
 	// as the one previously sent with an higher budget
-	maxBudgetForwarded    map[string]uint                   // key: requestID, value: max budget forwarded
-	cancelledComputations map[string]bool                   // set of IDs of cancelled computations, to avoid reserving the node again
-	availabilityMap       map[string][]string               // key: requesstID, IPs of the nodes who said they're available. used for requests created by this node
-	channelMap            map[string]chan map[string]string // key: request ID, value: channel that send the final result of all the remote computations
-	remainingInputMap     map[string]uint                   // key: request ID, value: number of inputs whose result has not yet been received
-	resultsMap            map[string]map[string]string      // key: requestID, value: map with inputs and their results. Used for requests created by this node
-	mutex                 sync.Mutex
+	maxBudgetForwarded                map[string]uint                   // key: requestID, value: max budget forwarded
+	cancelledComputations             map[string]bool                   // set of IDs of cancelled computations, to avoid reserving the node again
+	availabilityMap                   map[string][]string               // key: requesstID, IPs of the nodes who said they're available. used for requests created by this node
+	pretendedNodesCountMap            map[string]uint                   // key; requestID, value: number of nodes desired for that computation
+	availabilityCollectionChannelMap  map[string]chan struct{}          // key: requestID, value: channel which is triggered when the pretended number of available nodes is received
+	computationFinalizationChannelMap map[string]chan map[string]string // key: request ID, value: channel that send the final result of all the remote computations
+	remainingInputMap                 map[string]uint                   // key: request ID, value: number of inputs whose result has not yet been received
+	resultsMap                        map[string]map[string]string      // key: requestID, value: map with inputs and their results. Used for requests created by this node
+	mutex                             sync.Mutex
 }
 
 func newComputationManager() *computationManager {
 	return &computationManager{
-		balance:               50,
-		maxBudgetForwarded:    make(map[string]uint),
-		availabilityMap:       make(map[string][]string),
-		channelMap:            make(map[string]chan map[string]string),
-		remainingInputMap:     make(map[string]uint),
-		resultsMap:            make(map[string]map[string]string),
-		cancelledComputations: make(map[string]bool),
-		requestBeingServed:    "",
-		mutex:                 sync.Mutex{},
+		balance:                           50,
+		maxBudgetForwarded:                make(map[string]uint),
+		pretendedNodesCountMap:            make(map[string]uint),
+		availabilityMap:                   make(map[string][]string),
+		availabilityCollectionChannelMap:  make(map[string]chan struct{}),
+		computationFinalizationChannelMap: make(map[string]chan map[string]string),
+		remainingInputMap:                 make(map[string]uint),
+		resultsMap:                        make(map[string]map[string]string),
+		cancelledComputations:             make(map[string]bool),
+		requestBeingServed:                "",
+		mutex:                             sync.Mutex{},
 	}
 }
 
@@ -37,6 +41,10 @@ func (cm *computationManager) registerAvailability(requestID string, nodeAddress
 	defer cm.mutex.Unlock()
 
 	cm.availabilityMap[requestID] = append(cm.availabilityMap[requestID], nodeAddress)
+
+	if uint(len(cm.availabilityMap[requestID])) == cm.pretendedNodesCountMap[requestID] {
+		close(cm.availabilityCollectionChannelMap[requestID])
+	}
 }
 
 func (cm *computationManager) getResponseList(requestID string) []string {
@@ -130,11 +138,22 @@ func (cm *computationManager) registerComputation(requestID string, numberOfInpu
 	defer cm.mutex.Unlock()
 
 	newChannel := make(chan map[string]string)
-	cm.channelMap[requestID] = newChannel
+	cm.computationFinalizationChannelMap[requestID] = newChannel
 	cm.resultsMap[requestID] = make(map[string]string)
 	cm.remainingInputMap[requestID] = numberOfInputs
 
 	return newChannel
+}
+
+func (cm *computationManager) createAvailabilityChannel(requestID string, numberOfPretendedNodes uint) chan struct{} {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+
+	cm.pretendedNodesCountMap[requestID] = numberOfPretendedNodes
+	availabilityChannel := make(chan struct{})
+	cm.availabilityCollectionChannelMap[requestID] = availabilityChannel
+
+	return availabilityChannel
 }
 
 // todo: if we want to be extra safe we can ensure the results we get are from the node which is supposed to have sent them
@@ -148,11 +167,13 @@ func (cm *computationManager) storeResults(requestID string, results map[string]
 
 	cm.remainingInputMap[requestID] -= uint(len(results))
 	if cm.remainingInputMap[requestID] == 0 {
-		cm.channelMap[requestID] <- cm.resultsMap[requestID]
-		close(cm.channelMap[requestID])
-		delete(cm.channelMap, requestID)
+		cm.computationFinalizationChannelMap[requestID] <- cm.resultsMap[requestID]
+		close(cm.computationFinalizationChannelMap[requestID])
+		delete(cm.computationFinalizationChannelMap, requestID)
 		delete(cm.resultsMap, requestID)
 		delete(cm.availabilityMap, requestID)
 		delete(cm.remainingInputMap, requestID)
+		delete(cm.availabilityCollectionChannelMap, requestID)
+		delete(cm.pretendedNodesCountMap, requestID)
 	}
 }

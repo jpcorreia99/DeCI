@@ -15,11 +15,17 @@ import (
 	"time"
 )
 
-// todo: when we send a computation, also send the info about payment,
+// TODO: select statement quando se está à espera de receber avaialiblity queries
+// caso dê timeout -> enviar cancellation request
+// de qualquer maneira ter também um timeout no lado dos outros nodes
+// TODO: generalizar os comandos, em vez de ser python run, poder enviar isso na computação
+
 // if the payment was too far from reality, cost more or less
-// todo: sort inputs to prevent sketchy order
 // TODO: how to prevent attacks where nodes are reserved without being left
 // input the cost of the computation, the computation's id and the list of nodes that participated in the computation
+// todo: quando um nodo crasha, poder enviar as computações dele para outros
+// todo: adicionar timeout quando se está à espera de nodos
+// todo: ver o que fazer com imensos dados
 
 func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
 	// todo: maybe wait for paxos to finish
@@ -33,6 +39,9 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	// --------- STEP ----------
 	// save the executable, split the input data and estimate the cost of computing per unit
 	// also register on the computation manager the first resuls and retrieve the channel to
+
+	start := time.Now()
+
 	filename, err := saveExecutable(executable)
 	if err != nil {
 		return nil, err
@@ -40,7 +49,7 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 
 	inputData := splitData(inputs)
 	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, inputData)
-	print("Cost per unit: ", costPerUnit)
+	println("Cost per unit: ", costPerUnit)
 	if err != nil {
 		return nil, err
 	}
@@ -53,29 +62,42 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	computationConclusionChannel := n.computationManager.registerComputation(requestID, uint(len(inputData)))
 	n.computationManager.storeResults(requestID, results)
 
+	elapsed := time.Since(start)
+	fmt.Println("1st phase: ", elapsed.Seconds())
 	// remove from the inputs the ones already calculated
 	remainingInputs := inputData[len(alreadyCalculatedResults):]
 
 	// --------- STEP ----------
 	// sending the availability queries
-
-	err = n.sendBudgetedAvailabilityQueries(requestID, numberOfRequestedNodes)
+	start = time.Now()
+	nodeGatheringConclusion, err := n.sendBudgetedAvailabilityQueries(requestID, numberOfRequestedNodes)
 	if err != nil {
 		return nil, err
 	}
 
-	time.Sleep(5 * time.Second)
-	availableNodes := n.computationManager.getAvailableNodes(requestID)
-	fmt.Println("numero de respostas: ", len(availableNodes))
-	if uint(len(availableNodes)) < numberOfRequestedNodes {
+	// todo: change to channel
+	ticker := time.NewTicker(5 * time.Second)
+	select {
+	case <-n.terminationChannel:
+		availableNodes := n.computationManager.getAvailableNodes(requestID)
 		err = n.sendReservationCancellationMessages(requestID, availableNodes)
-		return nil, xerrors.Errorf("Unable to reserve enough nodes. Desired nodes %v, obtained nodes %v",
-			numberOfRequestedNodes, len(availableNodes))
+		return nil, err
+	case <-nodeGatheringConclusion:
+
+	case <-ticker.C:
+		availableNodes := n.computationManager.getAvailableNodes(requestID)
+		if uint(len(availableNodes)) < numberOfRequestedNodes {
+			err = n.sendReservationCancellationMessages(requestID, availableNodes)
+			return nil, xerrors.Errorf("Unable to reserve enough nodes. Desired nodes %v, obtained nodes %v",
+				numberOfRequestedNodes, len(availableNodes))
+		}
 	}
 
+	availableNodes := n.computationManager.getAvailableNodes(requestID)
+	elapsed = time.Since(start)
+	fmt.Println("2st phase: ", elapsed.Seconds())
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
-
 	var inputsPerNode [][]string = make([][]string, len(availableNodes))
 	i := 0
 	for j := 0; j < len(remainingInputs); j++ {
@@ -83,18 +105,24 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 		inputsPerNode[i] = append(inputsPerNode[i], remainingInputs[j])
 		i++
 	}
-	for i, inputList := range inputsPerNode {
-		fmt.Println(i, inputList)
-	}
 	err = n.sendComputationOrders(requestID, executable, availableNodes, inputsPerNode)
 	if err != nil {
 		return nil, err
 	}
 
+	// --------- STEP ----------
+	// wait for all computations to conclude
+	start = time.Now()
 	remoteComputationsResults := <-computationConclusionChannel
-	fmt.Println(remoteComputationsResults)
 	fmt.Println(len(remoteComputationsResults))
-	return nil, nil
+
+	var sb strings.Builder
+	for _, input := range inputData {
+		sb.WriteString(input + " " + remoteComputationsResults[input] + "\n")
+	}
+	elapsed = time.Since(start)
+	fmt.Println("4th phase: ", elapsed.Seconds())
+	return []byte(sb.String()), nil
 
 	/*for _, line := range remainingData {
 		codeArgs := strings.Split(line, ",")
@@ -135,13 +163,16 @@ func saveExecutable(executable []byte) (string, error) {
 func splitData(data []byte) []string {
 	dataString := string(data)
 	splitData := strings.Split(strings.ReplaceAll(dataString, "\r\n", "\n"), "\n")
-	rand.Shuffle(len(splitData), func(i, j int) { splitData[i], splitData[j] = splitData[j], splitData[i] })
 	return splitData
 }
 
 // return cost of executing each data point that has not already been evaluated,
 //results of already performed computations
-func estimateCost(filename string, separatedData []string) (float64, []string, error) {
+func estimateCost(filename string, inputsArray []string) (float64, []string, error) {
+	rand.Seed(time.Now().UnixNano())
+	separatedData := make([]string, len(inputsArray))
+	copy(separatedData, inputsArray) // make a copy to avoid shuffling the source array
+	rand.Shuffle(len(separatedData), func(i, j int) { separatedData[i], separatedData[j] = separatedData[j], separatedData[i] })
 	firstArgs := separatedData[0]
 	codeArgs := strings.Split(firstArgs, ",")
 	app := "python"
@@ -206,22 +237,23 @@ func estimateCost(filename string, separatedData []string) (float64, []string, e
 }
 
 // divides the budget evenly among the multiple neighbours and sens an availability query to them
-func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) error {
+func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) (chan struct{}, error) {
 	neighbourList := n.routingTable.neighbourList
 	if len(neighbourList) == 0 {
-		return nil
+		return nil, xerrors.New("The node has no neighbours")
 	}
+
+	availabilityChannel := n.computationManager.createAvailabilityChannel(requestID, budget)
 
 	if int(budget) <= len(neighbourList) {
 		for _, neighbourAddress := range neighbourList {
 			pkt, err := n.createAvailabilityQueryPacket(requestID, 1, neighbourAddress, n.socket.GetAddress())
 			if err != nil {
-				return err
+				return nil, err
 			}
-			fmt.Println("sending to", neighbourAddress)
 			err = n.socket.Send(neighbourAddress, pkt, 0)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			budget--
@@ -242,17 +274,16 @@ func (n *node) sendBudgetedAvailabilityQueries(requestID string, budget uint) er
 		for i, neighbourAddress := range neighbourList {
 			pkt, err := n.createAvailabilityQueryPacket(requestID, budgets[i], neighbourAddress, n.socket.GetAddress())
 			if err != nil {
-				return err
+				return nil, err
 			}
-			fmt.Println("sending to", neighbourAddress)
 			err = n.socket.Send(neighbourAddress, pkt, 0)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
-	return nil
+	return availabilityChannel, nil
 }
 
 // tells every reserved node to free up their resources
@@ -295,9 +326,9 @@ func (n *node) sendComputationOrders(requestID string, executable []byte, availa
 		if err != nil {
 			return err
 		}
-		computationOrdeHeader := transport.NewHeader(n.socket.GetAddress(), n.socket.GetAddress(), nodeAddress, 0)
+		computationOrderHeader := transport.NewHeader(n.socket.GetAddress(), n.socket.GetAddress(), nodeAddress, 0)
 		pkt := transport.Packet{
-			Header: &computationOrdeHeader,
+			Header: &computationOrderHeader,
 			Msg:    &computationOrderMarshaled,
 		}
 		err = n.socket.Send(nodeAddress, pkt, 0)

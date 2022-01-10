@@ -16,12 +16,12 @@ import (
 	"time"
 )
 
-var totalNumberOfPeers = uint(10)
+var totalNumberOfPeers = 11
 var count = uint(0)
 
 func main() {
 	var nodeList []peer.Peer
-	for i := 0; i < 10; i++ {
+	for i := 0; i < totalNumberOfPeers; i++ {
 		address := 11110
 		stringAddress := "127.0.0.1:" + strconv.Itoa(address+i)
 		println(stringAddress)
@@ -29,8 +29,8 @@ func main() {
 		nodeList = append(nodeList, peer)
 	}
 
-	for i := 0; i < 10; i++ {
-		for j := 0; j < 10; j++ {
+	for i := 0; i < totalNumberOfPeers; i++ {
+		for j := 0; j < totalNumberOfPeers; j++ {
 			if i != j {
 				address := 11110
 				stringAddress := "127.0.0.1:" + strconv.Itoa(address+j)
@@ -39,7 +39,7 @@ func main() {
 		}
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < totalNumberOfPeers; i++ {
 		err := nodeList[i].Start()
 		if err != nil {
 			fmt.Println(err)
@@ -55,13 +55,16 @@ func main() {
 
 	data, err := os.ReadFile("executables/numbers.txt")
 
-	_, err = nodeList[0].Compute(code, data, 9)
+	start := time.Now()
+	_, err = nodeList[0].Compute(code, data, 10)
+	elapsed := time.Since(start)
+	fmt.Println("duration: ", elapsed.Seconds())
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < totalNumberOfPeers; i++ {
 		fmt.Println("closing ", i)
 		err := nodeList[i].Stop()
 		if err != nil {
@@ -77,8 +80,8 @@ func main3() {
 	node4 := createPeer("127.0.0.1:11111")
 
 	/*
-					    4
-		             /     \
+					    4    -  6
+		             /     \  /
 		    		1		3
 		             \	   /
 		   \			2
@@ -212,7 +215,7 @@ func createPeer(address string) peer.Peer {
 		},
 		Storage: storage,
 
-		TotalPeers: totalNumberOfPeers,
+		TotalPeers: uint(totalNumberOfPeers),
 		PaxosThreshold: func(u uint) int {
 			return int(u/2 + 1)
 		},
