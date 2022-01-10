@@ -157,7 +157,6 @@ func main() {
 			return
 		}
 	}*/
-
 }
 func main3() {
 	node1 := createPeer("127.0.0.1:12345")
@@ -335,7 +334,7 @@ func createPeer(address string) peer.Peer {
 		},
 		PaxosID:            count,
 		PaxosProposerRetry: 7 * time.Second,
-		InitialBudget:      10,
+		InitialBudget:      100,
 	}
 
 	return peerFactory(conf)

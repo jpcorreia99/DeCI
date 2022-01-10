@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+//TODO: adicionar custo POR NODO E BURNING CASO NÃO SE CONSIGA
 // de qualquer maneira ter também um timeout no lado dos outros nodes
 // if the payment was too far from reality, cost more or less
 // TODO: how to prevent attacks where nodes are reserved without being left
@@ -50,6 +51,11 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 		return nil, err
 	}
 
+	totalCost := costPerUnit*float64(len(inputData)-len(alreadyCalculatedResults)) + float64(numberOfRequestedNodes)
+	if totalCost > n.localBudget {
+		return nil, xerrors.Errorf("Total operation cost above available budget %v - %v", totalCost, n.localBudget)
+	}
+
 	results := make(map[string]string)
 	for i := 0; i < len(alreadyCalculatedResults); i++ {
 		results[inputData[i]] = alreadyCalculatedResults[i]
@@ -71,7 +77,6 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 		return nil, err
 	}
 
-	// todo: change to channel
 	ticker := time.NewTicker(5 * time.Second)
 	select {
 	case <-n.terminationChannel:
@@ -91,7 +96,7 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 
 	availableNodes := n.computationManager.getAvailableNodes(requestID)
 	elapsed = time.Since(start)
-	fmt.Println("2st phase: ", elapsed.Seconds())
+	fmt.Println("2nd phase: ", elapsed.Seconds())
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
 	var inputsPerNodeArray [][]string = make([][]string, len(availableNodes))
@@ -122,6 +127,25 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	for _, input := range inputData {
 		sb.WriteString(input + " " + remoteComputationsResults[input] + "\n")
 	}
+	elapsed = time.Since(start)
+	fmt.Println("3rd phase: ", elapsed.Seconds())
+
+	// --------- STEP -------
+	// calculate the cost of the total operation and how much to send to everyone
+	start = time.Now()
+	costMap := make(map[string]float64)
+	totalCostTruncated := float64(int(totalCost*1000)) / 1000
+	costMap[n.socket.GetAddress()] -= totalCostTruncated
+
+	for nodeAddress, inputs := range inputsPerNode {
+		costMap[nodeAddress] = costPerUnit*float64(len(inputs)) + 1 // there's a base cost of 1 per node
+	}
+
+	err = n.UpdateBudget(requestID, costMap)
+	if err != nil {
+		return nil, err
+	}
+
 	elapsed = time.Since(start)
 	fmt.Println("4th phase: ", elapsed.Seconds())
 
