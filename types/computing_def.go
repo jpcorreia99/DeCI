@@ -7,12 +7,12 @@ package types
 type AvailabilityQueryMessage struct {
 	// RequestID must be a unique identifier. Use xid.New().String() to generate
 	// it.
-	RequestID string // todo: isto pode ter problemas por se usar expanding ring search, se calhar avisar que é do mesmo nodo ou algo parecido
-	// ou usar sempre o mesmo ID
+	RequestID string
+
 	// Source is the address of the peer that sends the query
 	Source string
 
-	Budget uint // number of nodes needed for a computation
+	Budget uint // number of nodes to request for a computation
 
 	AlreadyVisited map[string]bool // map indicating which nodes have already been visited, used to avoid sending spreading requests to already visited nodes
 }
@@ -35,9 +35,11 @@ type ReservationCancellationMessage struct {
 
 // ComputationOrderMessage defines an order to execute the given executble with the given inputs
 type ComputationOrderMessage struct {
-	RequestID  string // to avoid hijacking other nodes
-	Executable []byte
-	Inputs     []string
+	RequestID     string   // to avoid hijacking other nodes
+	ExecutionArgs []string // ex: [go, run]
+	FileExtension string   //ex .go
+	Executable    []byte
+	Inputs        []string
 }
 
 // ComputationResultMessage defines the result of a remote computation
@@ -45,9 +47,3 @@ type ComputationResultMessage struct {
 	RequestID string // to avoid hijacking other nodes
 	Results   map[string]string
 }
-
-// TODO: o budged to availability Query é removido do guito de uma pessoa
-// computation proposal e computation refusal + timeout
-// todo: como evitar spam de requesições para roubar nodos: enviar o pedido em si tem um custo
-// also: se calhar faz sentido cada nodo ter um custo base pela computação, para haver um tradeoff entre numero de nodos e speed
-// TODO: a repsosta devia conter tb o buget desse nodo, de forma a previlegiar nodos com menos recursos

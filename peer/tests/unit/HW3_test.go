@@ -43,7 +43,7 @@ func Test_HW3_Tag_Alone(t *testing.T) {
 
 	node1.AddPeer(node2.GetAddr())
 
-	participantAmountMap := make(map[string]int)
+	participantAmountMap := make(map[string]float64)
 	participantAmountMap[node1.GetAddr()] = -1
 	participantAmountMap[node2.GetAddr()] = 1
 
@@ -57,7 +57,7 @@ func Test_HW3_Tag_Alone(t *testing.T) {
 		return true
 	})
 
-	participantAmountMap = make(map[string]int)
+	participantAmountMap = make(map[string]float64)
 	participantAmountMap[node1.GetAddr()] = 3
 	participantAmountMap[node2.GetAddr()] = -3
 

@@ -15,16 +15,14 @@ import (
 	"time"
 )
 
-//TODO: adicionar custo POR NODO E BURNING CASO NÃO SE CONSIGA
 // de qualquer maneira ter também um timeout no lado dos outros nodes
 // if the payment was too far from reality, cost more or less
 // TODO: how to prevent attacks where nodes are reserved without being left
 // input the cost of the computation, the computation's id and the list of nodes that participated in the computation
-// todo: quando um nodo crasha, poder enviar as computações dele para outros
 // todo: adicionar timeout quando se está à espera de nodos
-// todo: ver o que fazer com imensos dados
+// todo: ver o que fazer com imensos dados, maybe TCP
 
-func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
+func (n *node) Compute(executable []byte, executionArgs []string, fileExtension string, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
 	// todo: maybe wait for paxos to finish
 	if numberOfRequestedNodes > n.configuration.TotalPeers-1 {
 		return nil, xerrors.Errorf("Number of nodes to request above total number of nodes: %v - %v ",
@@ -39,13 +37,13 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 
 	start := time.Now()
 
-	filename, err := saveExecutable(executable)
+	filename, err := saveExecutable(executable, fileExtension)
 	if err != nil {
 		return nil, err
 	}
 
 	inputData := splitData(inputs)
-	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, inputData)
+	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, executionArgs, inputData)
 	println("Cost per unit: ", costPerUnit)
 	if err != nil {
 		return nil, err
@@ -65,7 +63,7 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	n.computationManager.storeResults(requestID, results)
 
 	elapsed := time.Since(start)
-	fmt.Println("1st phase: ", elapsed.Seconds())
+	fmt.Println("Cost estimation duration: ", elapsed.Seconds())
 	// remove from the inputs the ones already calculated
 	remainingInputs := inputData[len(alreadyCalculatedResults):]
 
@@ -96,7 +94,7 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 
 	availableNodes := n.computationManager.getAvailableNodes(requestID)
 	elapsed = time.Since(start)
-	fmt.Println("2nd phase: ", elapsed.Seconds())
+	fmt.Println("Availability collection duration: ", elapsed.Seconds())
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
 	var inputsPerNodeArray [][]string = make([][]string, len(availableNodes))
@@ -112,7 +110,7 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 		inputsPerNode[address] = inputsPerNodeArray[i]
 	}
 
-	err = n.sendComputationOrders(requestID, executable, inputsPerNode)
+	err = n.sendComputationOrders(requestID, executionArgs, fileExtension, executable, inputsPerNode)
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +119,13 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	// wait for all computations to conclude
 	start = time.Now()
 	remoteComputationsResults := <-computationConclusionChannel
-	fmt.Println(len(remoteComputationsResults))
 
 	var sb strings.Builder
 	for _, input := range inputData {
 		sb.WriteString(input + " " + remoteComputationsResults[input] + "\n")
 	}
 	elapsed = time.Since(start)
-	fmt.Println("3rd phase: ", elapsed.Seconds())
+	fmt.Println("Remote execution duration: ", elapsed.Seconds())
 
 	// --------- STEP -------
 	// calculate the cost of the total operation and how much to send to everyone
@@ -147,17 +144,17 @@ func (n *node) Compute(executable []byte, inputs []byte, numberOfRequestedNodes 
 	}
 
 	elapsed = time.Since(start)
-	fmt.Println("4th phase: ", elapsed.Seconds())
+	fmt.Println("Paxos duration: ", elapsed.Seconds())
 
 	return []byte(sb.String()), nil
 }
 
 // saves the executable code as a file
 // returns filename
-func saveExecutable(executable []byte) (string, error) {
+func saveExecutable(executable []byte, extension string) (string, error) {
 	code := string(executable)
 	timestamp := time.Now().Unix()
-	filename := "executables/" + strconv.FormatInt(timestamp, 10)
+	filename := "executables/" + strconv.FormatInt(timestamp, 10) + extension
 	file, err := os.Create(filename)
 	defer file.Close()
 	// len variable captures the length
@@ -178,15 +175,16 @@ func splitData(data []byte) []string {
 
 // return cost of executing each data point that has not already been evaluated,
 //results of already performed computations
-func estimateCost(filename string, inputsArray []string) (float64, []string, error) {
+func estimateCost(filename string, executionArgs []string, inputsArray []string) (float64, []string, error) {
 	rand.Seed(time.Now().UnixNano())
 	separatedData := make([]string, len(inputsArray))
 	copy(separatedData, inputsArray) // make a copy to avoid shuffling the source array
 	rand.Shuffle(len(separatedData), func(i, j int) { separatedData[i], separatedData[j] = separatedData[j], separatedData[i] })
 	firstArgs := separatedData[0]
 	codeArgs := strings.Split(firstArgs, ",")
-	app := "python"
-	args := make([]string, 0, 1+len(codeArgs))
+	app := executionArgs[0]
+	args := make([]string, 0, 1+len(executionArgs)-1+len(codeArgs))
+	args = append(args, executionArgs[1:]...)
 	args = append(args, filename)
 	args = append(args, codeArgs...)
 	fmt.Println(args)
@@ -213,8 +211,9 @@ func estimateCost(filename string, inputsArray []string) (float64, []string, err
 	for i := 1; i < 3; i++ {
 		firstArgs = separatedData[i]
 		codeArgs := strings.Split(firstArgs, ",")
-		app := "python"
-		args := make([]string, 0, 1+len(codeArgs))
+		app := executionArgs[0]
+		args := make([]string, 0, 1+len(executionArgs)-1+len(codeArgs))
+		args = append(args, executionArgs[1:]...)
 		args = append(args, filename)
 		args = append(args, codeArgs...)
 		fmt.Println(args)
@@ -324,12 +323,15 @@ func (n *node) sendReservationCancellationMessages(requestID string, addressList
 }
 
 // send a computation order to each of the promised nodes with the inputs they should process
-func (n *node) sendComputationOrders(requestID string, executable []byte, inputsPerNode map[string][]string) error {
+func (n *node) sendComputationOrders(requestID string, executionArgs []string, fileExtension string,
+	executable []byte, inputsPerNode map[string][]string) error {
 	for nodeAddress, inputs := range inputsPerNode {
 		computationOrder := types.ComputationOrderMessage{
-			RequestID:  requestID,
-			Executable: executable,
-			Inputs:     inputs,
+			RequestID:     requestID,
+			Executable:    executable,
+			FileExtension: fileExtension,
+			ExecutionArgs: executionArgs,
+			Inputs:        inputs,
 		}
 
 		computationOrderMarshaled, err := n.registry.MarshalMessage(computationOrder)
