@@ -131,13 +131,13 @@ func main() {
 		}
 	}
 
-	code, err := os.ReadFile("executables/dupper.py")
+	code, err := os.ReadFile("samples/dupper.py")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	data, err := os.ReadFile("executables/numbers.txt")
+	data, err := os.ReadFile("samples/numbers.txt")
 
 	start := time.Now()
 	_, err = nodeList[0].Compute(code, data, 10)
