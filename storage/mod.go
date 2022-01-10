@@ -16,8 +16,6 @@ type Storage interface {
 
 	// GetBlockchainStore returns a storage to store the blockchain blocks.
 	GetBlockchainStore() Store
-
-	GetTransactionStore() Store
 }
 
 // Store describes the primitives of a simple storage.
