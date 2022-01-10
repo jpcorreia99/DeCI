@@ -7,5 +7,5 @@ type Budgeting interface {
 	// Then, it proposes a value which is the total cost of the computation divided by the number of nodes that
 	// participated in the computation, along with the list of peers that participated in the computation.
 
-	UpdateBudget(computationID string, participantAmountMap map[string]int) error
+	UpdateBudget(computationID string, participantAmountMap map[string]float64) error
 }

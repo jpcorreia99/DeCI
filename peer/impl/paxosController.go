@@ -229,8 +229,8 @@ func (pc *paxosController) addBlock(block types.BlockchainBlock, peer *node) err
 	return nil
 }
 
-func decodeMapFromString(s string) (map[string]int, error) {
-	decodedMap := make(map[string]int)
+func decodeMapFromString(s string) (map[string]float64, error) {
+	decodedMap := make(map[string]float64)
 
 	err := json.Unmarshal([]byte(s), &decodedMap)
 

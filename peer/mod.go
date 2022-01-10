@@ -82,7 +82,7 @@ type Configuration struct {
 	// Default: 5s.
 	PaxosProposerRetry time.Duration
 
-	InitialBudget uint
+	InitialBudget float64
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

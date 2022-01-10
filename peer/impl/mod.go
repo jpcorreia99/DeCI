@@ -2,6 +2,7 @@ package impl
 
 import (
 	"errors"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/registry"
@@ -25,6 +26,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	searchStorer := newConcurrentSearchResultsStore()
 	searchMap := newConcurrentSearchMap()
 	paxosController := newPaxosController(conf)
+	computationManager := newComputationManager()
 
 	node := &node{
 		running:            uint32(0),
@@ -42,12 +44,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		searchStorer:       searchStorer,
 		searchMap:          searchMap,
 		paxosController:    paxosController,
-		localBudget:        int(conf.InitialBudget),
+		computationManager: computationManager,
+		localBudget:        conf.InitialBudget,
 	}
 
 	// adding itself to the routing table
 	node.routingTable.addPair(node.socket.GetAddress(), node.socket.GetAddress())
-
+	// register callbacks
 	node.registry.RegisterMessageCallback(types.ChatMessage{}, node.ChatMessageCallback)
 	node.registry.RegisterMessageCallback(types.EmptyMessage{}, node.EmptyMessageCallback)
 	node.registry.RegisterMessageCallback(types.StatusMessage{}, node.StatusMessageCallback)
@@ -63,6 +66,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	node.registry.RegisterMessageCallback(types.PaxosPromiseMessage{}, node.PaxosPromiseMessageCallback)
 	node.registry.RegisterMessageCallback(types.PaxosAcceptMessage{}, node.PaxosAcceptMessageCallback)
 	node.registry.RegisterMessageCallback(types.TLCMessage{}, node.TlCMessageCallback)
+	node.registry.RegisterMessageCallback(types.AvailabilityQueryMessage{}, node.AvailabilityQueryMessageCallback)
+	node.registry.RegisterMessageCallback(types.AvailabilityResponseMessage{}, node.AvailabilityResponseMessageCallback)
+	node.registry.RegisterMessageCallback(types.ReservationCancellationMessage{}, node.ReservationCancellationMessageCallback)
+	node.registry.RegisterMessageCallback(types.ComputationOrderMessage{}, node.ComputationOrderMessageCallback)
+	node.registry.RegisterMessageCallback(types.ComputationResultMessage{}, node.ComputationResultMessageCallback)
 	return node
 }
 
@@ -86,7 +94,8 @@ type node struct {
 	searchStorer       *concurrentSearchResultsStore // used in the SearchAll function to store the files returned
 	searchMap          *concurrentSearchMap          // used in the SearchFirst function to store channels responsible to signal a valid file
 	paxosController    *paxosController
-	localBudget        int
+	computationManager *computationManager
+	localBudget        float64
 }
 
 // Start implements peer.Service
@@ -96,11 +105,13 @@ func (n *node) Start() error {
 	go n.mainReadingRoutine()
 
 	if n.configuration.AntiEntropyInterval > 0 {
+		fmt.Println("x")
 		n.wg.Add(1)
 		go n.antiEntropyMechanism()
 	}
 
 	if n.configuration.HeartbeatInterval > 0 {
+		fmt.Println("d")
 		n.wg.Add(1)
 		go n.heartbeatMechanism()
 	}
@@ -132,7 +143,7 @@ func (n *node) mainReadingRoutine() {
 	defer n.wg.Done()
 
 	for atomic.LoadUint32(&n.running) == 1 {
-		pkt, err := n.socket.Recv(time.Second * 1)
+		pkt, err := n.socket.Recv(time.Millisecond * 200)
 
 		if errors.Is(err, transport.TimeoutErr(0)) {
 			continue
@@ -144,7 +155,6 @@ func (n *node) mainReadingRoutine() {
 
 		n.wg.Add(1)
 		go n.handlePacket(pkt)
-		//n.handlePacket(pkt)
 	}
 }
 

@@ -59,7 +59,7 @@ func init() {
 
 }
 
-func main2() {
+func main_() {
 	app := &urfave.App{
 		Name:  "node controller",
 		Usage: "Please use the start command",
