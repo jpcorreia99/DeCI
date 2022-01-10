@@ -88,17 +88,17 @@ func (n *node) ComputationOrderMessageCallback(msg types.Message, pkt transport.
 	executable := computationOrderMsg.Executable
 	inputs := computationOrderMsg.Inputs
 
-	filename, err := saveExecutable(executable)
+	filename, err := saveExecutable(executable, computationOrderMsg.FileExtension)
 	if err != nil {
 		return err
 	}
 
-	//TODO: later add measuring time for budget
 	answerMap := make(map[string]string)
 	for _, line := range inputs {
 		codeArgs := strings.Split(line, ",")
-		app := "python"
-		args := make([]string, 0, 1+len(codeArgs))
+		app := computationOrderMsg.ExecutionArgs[0]
+		args := make([]string, 0, 1+len(computationOrderMsg.ExecutionArgs)-1+len(codeArgs))
+		args = append(args, computationOrderMsg.ExecutionArgs[1:]...)
 		args = append(args, filename)
 		args = append(args, codeArgs...)
 		output, err := exec.Command(app, args...).Output()

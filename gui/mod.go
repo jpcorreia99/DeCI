@@ -140,7 +140,8 @@ func main() {
 	data, err := os.ReadFile("executables/numbers.txt")
 
 	start := time.Now()
-	_, err = nodeList[0].Compute(code, data, 10)
+	_, err = nodeList[0].Compute(code, []string{"python"}, ".py", data, 10)
+	//_, err = nodeList[0].Compute(code, []string{"go", "run"}, ".go", data, 10)
 
 	elapsed := time.Since(start)
 	fmt.Println("duration: ", elapsed.Seconds())
@@ -231,7 +232,7 @@ func main3() {
 
 	data, err := os.ReadFile("executables/data.txt")
 
-	_, err = node2.Compute(code, data, 3)
+	_, err = node2.Compute(code, []string{"python"}, ".py", data, 3)
 	if err != nil {
 		fmt.Println(err)
 		return
