@@ -187,7 +187,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 	args = append(args, executionArgs[1:]...)
 	args = append(args, filename)
 	args = append(args, codeArgs...)
-	fmt.Println(args)
+	fmt.Println("Estimating", args)
 	start := time.Now()
 
 	output, err := exec.Command(app, args...).Output()
@@ -198,7 +198,6 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 	elapsed := time.Since(start)
 	// if time elapsed was more than 5 use just one data point to estimate cost
 	if elapsed.Seconds() >= 5 {
-		println("average duration above 5: ", elapsed.Seconds())
 		return math.RoundToEven(elapsed.Seconds()),
 			[]string{string(output)}, nil
 	}
@@ -216,7 +215,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 		args = append(args, executionArgs[1:]...)
 		args = append(args, filename)
 		args = append(args, codeArgs...)
-		fmt.Println(args)
+		fmt.Println("Estimating ", args)
 		start = time.Now()
 
 		output, err = exec.Command(app, args...).Output()
@@ -237,10 +236,8 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 
 	// if the duration was more than 1 second, just round cost to integer
 	if averageDuration >= 1 {
-		println("Average duration above 1 ", averageDuration)
 		return math.RoundToEven(averageDuration), results, nil
 	} else {
-		println("Average duration under 1 ", averageDuration)
 		return math.Round(averageDuration*1000) / 1000, results, nil
 	}
 }
