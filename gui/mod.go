@@ -107,7 +107,6 @@ func main() {
 	for i := 0; i < totalNumberOfPeers; i++ {
 		address := 11110
 		stringAddress := "127.0.0.1:" + strconv.Itoa(address+i)
-		println(stringAddress)
 		peerNode := createPeer(stringAddress)
 		defer peerNode.Stop()
 		nodeList = append(nodeList, peerNode)

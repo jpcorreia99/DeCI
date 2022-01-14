@@ -80,7 +80,7 @@ func (n *node) ComputationOrderMessageCallback(msg types.Message, pkt transport.
 	}
 
 	requestID := computationOrderMsg.RequestID
-	idWasPromised := n.computationManager.wasIdPromised(requestID)
+	idWasPromised := n.computationManager.signalExecutableReceived(requestID)
 	if !idWasPromised {
 		return nil
 	}

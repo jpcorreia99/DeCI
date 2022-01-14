@@ -2,12 +2,15 @@ package impl
 
 import (
 	"sync"
+	"time"
 )
 
 type computationManager struct {
-	balance            int
-	requestBeingServed string // id of the computation that reserved the node -> not used by computations issued by the node, only for the ones received from external sources
-	// this is used to stop propagating queries of the same id which have lower budgets, since they'll never reach as far
+	balance               int
+	requestBeingServed    string // id of the computation that reserved the node -> not used by computations issued by the node, only for the ones received from external sources
+	hasReceivedExecutable bool   // boolean indicating if, after being reserved, the node has already received the executable code
+
+	// maxBudgetForwarded - this is used to stop propagating queries of the same id which have lower budgets, since they'll never reach as far
 	// as the one previously sent with an higher budget
 	maxBudgetForwarded                map[string]uint                   // key: requestID, value: max budget forwarded
 	cancelledComputations             map[string]bool                   // set of IDs of cancelled computations, to avoid reserving the node again
@@ -32,6 +35,7 @@ func newComputationManager() *computationManager {
 		resultsMap:                        make(map[string]map[string]string),
 		cancelledComputations:             make(map[string]bool),
 		requestBeingServed:                "",
+		hasReceivedExecutable:             false,
 		mutex:                             sync.Mutex{},
 	}
 }
@@ -80,6 +84,7 @@ func (cm *computationManager) tryReserve(requestID string, requestBudget uint) (
 	if cm.requestBeingServed == "" {
 		cm.requestBeingServed = requestID
 		cm.maxBudgetForwarded[requestID] = requestBudget - 1
+		go cm.selfDeReservation(requestID) // launches a routine that removes the reservation if after a given amount of time no executable has been received
 		if requestBudget-1 > 0 {
 			return true, true
 		} else {
@@ -120,17 +125,25 @@ func (cm *computationManager) cancelReservation(requestID string) {
 
 	if cm.requestBeingServed == requestID {
 		cm.requestBeingServed = ""
+		cm.hasReceivedExecutable = false
 	}
 
 	cm.cancelledComputations[requestID] = true
 }
 
 // checks if the id of a received computation order matches the one that this node has promised
-func (cm *computationManager) wasIdPromised(requestID string) bool {
+// if it was, turn the boolean that signals a computation has been received to true
+func (cm *computationManager) signalExecutableReceived(requestID string) bool {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()
 
-	return cm.requestBeingServed == requestID
+	wasIdRequested := cm.requestBeingServed == requestID
+	if !wasIdRequested {
+		return false
+	} else {
+		cm.hasReceivedExecutable = true
+		return true
+	}
 }
 
 func (cm *computationManager) registerComputation(requestID string, numberOfInputs uint) chan map[string]string {
@@ -175,5 +188,18 @@ func (cm *computationManager) storeResults(requestID string, results map[string]
 		delete(cm.remainingInputMap, requestID)
 		delete(cm.availabilityCollectionChannelMap, requestID)
 		delete(cm.pretendedNodesCountMap, requestID)
+	}
+}
+
+// gets called as a routine. After a given amount of time, if the node hasn't yet receuived the executable for the
+// request is has been reserved for it deReserves itself
+func (cm *computationManager) selfDeReservation(requestID string) {
+	time.Sleep(10 * time.Second)
+
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+
+	if cm.requestBeingServed == requestID && !cm.hasReceivedExecutable {
+		cm.requestBeingServed = ""
 	}
 }
