@@ -55,8 +55,8 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	}
 
 	results := make(map[string]string)
-	for i := 0; i < len(alreadyCalculatedResults); i++ {
-		results[inputData[i]] = alreadyCalculatedResults[i]
+	for input, output := range alreadyCalculatedResults {
+		results[input] = output
 	}
 
 	computationConclusionChannel := n.computationManager.registerComputation(requestID, uint(len(inputData)))
@@ -65,7 +65,12 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	elapsed := time.Since(start)
 	fmt.Println("Cost estimation duration: ", elapsed.Seconds())
 	// remove from the inputs the ones already calculated
-	remainingInputs := inputData[len(alreadyCalculatedResults):]
+	remainingInputs := make([]string, 0, len(inputData)-len(alreadyCalculatedResults))
+	for _, val := range inputData {
+		if _, isAlreadyCalculated := alreadyCalculatedResults[val]; !isAlreadyCalculated {
+			remainingInputs = append(remainingInputs, val)
+		}
+	}
 
 	// --------- STEP ----------
 	// sending the availability queries
@@ -175,8 +180,9 @@ func splitData(data []byte) []string {
 
 // return cost of executing each data point that has not already been evaluated,
 //results of already performed computations
-func estimateCost(filename string, executionArgs []string, inputsArray []string) (float64, []string, error) {
+func estimateCost(filename string, executionArgs []string, inputsArray []string) (float64, map[string]string, error) {
 	rand.Seed(time.Now().UnixNano())
+	results := make(map[string]string)
 	separatedData := make([]string, len(inputsArray))
 	copy(separatedData, inputsArray) // make a copy to avoid shuffling the source array
 	rand.Shuffle(len(separatedData), func(i, j int) { separatedData[i], separatedData[j] = separatedData[j], separatedData[i] })
@@ -196,15 +202,15 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 	}
 
 	elapsed := time.Since(start)
+	results[separatedData[0]] = string(output)
 	// if time elapsed was more than 5 use just one data point to estimate cost
 	if elapsed.Seconds() >= 5 {
 		return math.RoundToEven(elapsed.Seconds()),
-			[]string{string(output)}, nil
+			results, nil
 	}
 
 	// if one execution took less than 5 seconds
 	// calculate the average duration, by measuring two more data points
-	results := []string{string(output)}
 	durations := []time.Duration{elapsed}
 
 	for i := 1; i < 3; i++ {
@@ -223,7 +229,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 			return 0, nil, err
 		}
 		elapsed = time.Since(start)
-		results = append(results, string(output))
+		results[separatedData[i]] = string(output)
 		durations = append(durations, elapsed)
 	}
 
