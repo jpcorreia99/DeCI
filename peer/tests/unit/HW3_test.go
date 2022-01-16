@@ -80,42 +80,25 @@ func Test_HW3_Tag_Alone(t *testing.T) {
 func Test_HW3_Paxos_Acceptor_Prepare_Wrong_Step(t *testing.T) {
 	transp := channel.NewTransport()
 
-	acceptor := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithPaxosID(1))
-	defer acceptor.Stop()
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithPaxosID(1))
+	defer node1.Stop()
 
-	proposer, err := transp.CreateSocket("127.0.0.1:0")
-	require.NoError(t, err)
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithPaxosID(2))
+	defer node2.Stop()
 
-	acceptor.AddPeer(proposer.GetAddress())
+	node2.AddPeer(node1.GetAddr())
 
-	// sending a prepare with a wrong step
+	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithPaxosID(3))
 
-	prepare := types.PaxosPrepareMessage{
-		Step:   99, // wrong step
-		ID:     1,
-		Source: proposer.GetAddress(),
-	}
+	err := node3.JoinNetwork(node2.GetAddr())
 
-	transpMsg, err := acceptor.GetRegistry().MarshalMessage(&prepare)
-	require.NoError(t, err)
-
-	header := transport.NewHeader(proposer.GetAddress(), proposer.GetAddress(), acceptor.GetAddr(), 0)
-
-	packet := transport.Packet{
-		Header: &header,
-		Msg:    &transpMsg,
-	}
-
-	err = proposer.Send(acceptor.GetAddr(), packet, 0)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
 
-	// > acceptor must have ignored the message
-
-	require.Len(t, acceptor.GetOuts(), 0)
-	require.Equal(t, 0, acceptor.GetStorage().GetBlockchainStore().Len())
-	require.Equal(t, 0, acceptor.GetStorage().GetNamingStore().Len())
+	require.Equal(t, uint(3), node1.GetTotalPeers())
+	require.Equal(t, uint(3), node2.GetTotalPeers())
+	require.Equal(t, uint(3), node3.GetTotalPeers())
 }
 
 // 3-3

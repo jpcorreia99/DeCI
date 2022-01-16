@@ -93,7 +93,7 @@ func (n *node) StatusMessageCallback(msg types.Message, pkt transport.Packet) er
 		return xerrors.Errorf("Conversion to Rumors Message failed")
 	}
 
-	// get all the rumours that are missing on the remote peer
+	// Get all the rumours that are missing on the remote peer
 	missingRumoursList := n.statusManager.getMissingRumors(sequenceTable(*statusMsg))
 
 	if len(missingRumoursList) > 0 {

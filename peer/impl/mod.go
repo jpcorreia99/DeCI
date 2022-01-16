@@ -26,6 +26,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	searchMap := newConcurrentSearchMap()
 	paxosController := newPaxosController(conf)
 	computationManager := newComputationManager()
+	peerMap := newConcurrentPeerMap()
+	joinAckMap := newConcurrentJoinAckMap()
+	hasJoined := newConcurrentBool()
 
 	node := &node{
 		running:            uint32(0),
@@ -45,6 +48,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		paxosController:    paxosController,
 		computationManager: computationManager,
 		localBudget:        conf.InitialBudget,
+		peerMap:            peerMap,
+		joinAckMap:         joinAckMap,
+		hasJoined:          hasJoined,
 	}
 
 	// adding itself to the routing table
@@ -70,6 +76,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	node.registry.RegisterMessageCallback(types.ReservationCancellationMessage{}, node.ReservationCancellationMessageCallback)
 	node.registry.RegisterMessageCallback(types.ComputationOrderMessage{}, node.ComputationOrderMessageCallback)
 	node.registry.RegisterMessageCallback(types.ComputationResultMessage{}, node.ComputationResultMessageCallback)
+	node.registry.RegisterMessageCallback(types.JoinMessage{}, node.JoinMessageCallback)
+	node.registry.RegisterMessageCallback(types.AckJoinMessage{}, node.AckJoinMessageCallback)
 	return node
 }
 
@@ -95,6 +103,9 @@ type node struct {
 	paxosController    *paxosController
 	computationManager *computationManager
 	localBudget        float64
+	peerMap            *ConcurrentPeerMap
+	joinAckMap         *ConcurrentJoinAckMap
+	hasJoined          *ConcurrentBool
 }
 
 // Start implements peer.Service
@@ -131,7 +142,7 @@ func (n *node) Stop() error {
 	n.ackMap.closeAllChannels()
 	n.requestMap.closeAllChannels()
 	n.searchMap.closeAllChannels()
-	n.wg.Wait()
+	//n.wg.Wait()
 	return err
 }
 

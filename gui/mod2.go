@@ -218,7 +218,7 @@ func start(c *urfave.Context) error {
 		},
 		Storage: storage,
 
-		TotalPeers: totalPeers,
+		TotalPeers: peer.NewConcurrentUint(uint(totalPeers)),
 		PaxosThreshold: func(u uint) int {
 			return int(u/2 + 1)
 		},

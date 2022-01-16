@@ -22,11 +22,19 @@ import (
 // todo: adicionar timeout quando se está à espera de nodos
 // todo: ver o que fazer com imensos dados, maybe TCP
 
+var EXECUTABLE_LOCATION = "/Users/gfotiadis/programming/decentralized/DeCI/executables/"
+
 func (n *node) Compute(executable []byte, executionArgs []string, fileExtension string, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
 	// todo: maybe wait for paxos to finish
-	if numberOfRequestedNodes > n.configuration.TotalPeers-1 {
+
+	//if !n.hasJoined.get(){
+	//	fmt.Println("Node has not yet joined the network")
+	//	return nil, nil
+	//}
+
+	if numberOfRequestedNodes > n.configuration.TotalPeers.Get()-1 {
 		return nil, xerrors.Errorf("Number of nodes to request above total number of nodes: %v - %v ",
-			numberOfRequestedNodes, n.configuration.TotalPeers-1)
+			numberOfRequestedNodes, n.configuration.TotalPeers.Get()-1)
 	}
 
 	requestID := xid.New().String()
@@ -44,7 +52,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 
 	inputData := splitData(inputs)
 	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, executionArgs, inputData)
-	println("Cost per unit: ", costPerUnit)
+	println("Cost per sample: ", costPerUnit)
 	if err != nil {
 		return nil, err
 	}
@@ -114,37 +122,41 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	for i, address := range availableNodes {
 		inputsPerNode[address] = inputsPerNodeArray[i]
 	}
-
 	err = n.sendComputationOrders(requestID, executionArgs, fileExtension, executable, inputsPerNode)
 	if err != nil {
 		return nil, err
 	}
-
 	// --------- STEP ----------
 	// wait for all computations to conclude
+	println("Waiting for computation to finish")
 	start = time.Now()
 	remoteComputationsResults := <-computationConclusionChannel
+	println("All computation is done")
 
 	var sb strings.Builder
 	for _, input := range inputData {
 		sb.WriteString(input + " " + remoteComputationsResults[input] + "\n")
 	}
 	elapsed = time.Since(start)
-	fmt.Println("Remote execution duration: ", elapsed.Seconds())
+	fmt.Println("Pure execution duration: ", elapsed.Seconds())
 
 	// --------- STEP -------
 	// calculate the cost of the total operation and how much to send to everyone
 	start = time.Now()
 	costMap := make(map[string]float64)
 	totalCostTruncated := float64(int(totalCost*1000)) / 1000
+
+	fmt.Printf("Total cost: %v\n", totalCostTruncated)
+
 	costMap[n.socket.GetAddress()] -= totalCostTruncated
 
 	for nodeAddress, inputs := range inputsPerNode {
 		costMap[nodeAddress] = costPerUnit*float64(len(inputs)) + 1 // there's a base cost of 1 per node
 	}
-
+	fmt.Println("Starting budget update...")
 	err = n.UpdateBudget(requestID, costMap)
 	if err != nil {
+		fmt.Printf("Something went wrong when updating the budger, error : %v\n", err)
 		return nil, err
 	}
 
@@ -159,7 +171,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 func saveExecutable(executable []byte, extension string) (string, error) {
 	code := string(executable)
 	timestamp := time.Now().Unix()
-	filename := "executables/" + strconv.FormatInt(timestamp, 10) + extension
+	filename := EXECUTABLE_LOCATION + strconv.FormatInt(timestamp, 10) + extension
 	file, err := os.Create(filename)
 	defer file.Close()
 	// len variable captures the length
@@ -193,7 +205,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 	args = append(args, executionArgs[1:]...)
 	args = append(args, filename)
 	args = append(args, codeArgs...)
-	fmt.Println("Estimating", args)
+	//fmt.Println(args)
 	start := time.Now()
 
 	output, err := exec.Command(app, args...).Output()
@@ -221,7 +233,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 		args = append(args, executionArgs[1:]...)
 		args = append(args, filename)
 		args = append(args, codeArgs...)
-		fmt.Println("Estimating ", args)
+		//fmt.Println(args)
 		start = time.Now()
 
 		output, err = exec.Command(app, args...).Output()
@@ -242,6 +254,7 @@ func estimateCost(filename string, executionArgs []string, inputsArray []string)
 
 	// if the duration was more than 1 second, just round cost to integer
 	if averageDuration >= 1 {
+		//println("Average duration of running one sample above 1 ", averageDuration)
 		return math.RoundToEven(averageDuration), results, nil
 	} else {
 		return math.Round(averageDuration*1000) / 1000, results, nil
