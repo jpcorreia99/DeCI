@@ -15,23 +15,9 @@ import (
 	"time"
 )
 
-// de qualquer maneira ter também um timeout no lado dos outros nodes
-// if the payment was too far from reality, cost more or less
-// TODO: how to prevent attacks where nodes are reserved without being left
-// input the cost of the computation, the computation's id and the list of nodes that participated in the computation
-// todo: adicionar timeout quando se está à espera de nodos
-// todo: ver o que fazer com imensos dados, maybe TCP
-
-var EXECUTABLE_LOCATION = "/Users/gfotiadis/programming/decentralized/DeCI/executables/"
+var EXECUTABLE_LOCATION = "../executables/"
 
 func (n *node) Compute(executable []byte, executionArgs []string, fileExtension string, inputs []byte, numberOfRequestedNodes uint) ([]byte, error) {
-	// todo: maybe wait for paxos to finish
-
-	//if !n.hasJoined.get(){
-	//	fmt.Println("Node has not yet joined the network")
-	//	return nil, nil
-	//}
-
 	if numberOfRequestedNodes > n.configuration.TotalPeers.Get()-1 {
 		return nil, xerrors.Errorf("Number of nodes to request above total number of nodes: %v - %v ",
 			numberOfRequestedNodes, n.configuration.TotalPeers.Get()-1)
@@ -43,7 +29,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	// save the executable, split the input data and estimate the cost of computing per unit
 	// also register on the computation manager the first resuls and retrieve the channel to
 
-	start := time.Now()
+	//start := time.Now()
 
 	filename, err := saveExecutable(executable, fileExtension)
 	if err != nil {
@@ -52,13 +38,15 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 
 	inputData := splitData(inputs)
 	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, executionArgs, inputData)
-	println("Cost per sample: ", costPerUnit)
+	//println("Cost per sample: ", costPerUnit)
 	if err != nil {
+		println("ERROR ", err)
 		return nil, err
 	}
 
 	totalCost := costPerUnit*float64(len(inputData)-len(alreadyCalculatedResults)) + float64(numberOfRequestedNodes)
 	if totalCost > n.localBudget {
+		println("ERROR no budget")
 		return nil, xerrors.Errorf("Total operation cost above available budget %v - %v", totalCost, n.localBudget)
 	}
 
@@ -70,8 +58,8 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	computationConclusionChannel := n.computationManager.registerComputation(requestID, uint(len(inputData)))
 	n.computationManager.storeResults(requestID, results)
 
-	elapsed := time.Since(start)
-	fmt.Println("Cost estimation duration: ", elapsed.Seconds())
+	//elapsed := time.Since(start)
+	//fmt.Println("Cost estimation duration: ", elapsed.Seconds())
 	// remove from the inputs the ones already calculated
 	remainingInputs := make([]string, 0, len(inputData)-len(alreadyCalculatedResults))
 	for _, val := range inputData {
@@ -82,7 +70,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 
 	// --------- STEP ----------
 	// sending the availability queries
-	start = time.Now()
+	//start = time.Now()
 	nodeGatheringConclusion, err := n.sendBudgetedAvailabilityQueries(requestID, numberOfRequestedNodes)
 	if err != nil {
 		return nil, err
@@ -106,8 +94,8 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	}
 
 	availableNodes := n.computationManager.getAvailableNodes(requestID)
-	elapsed = time.Since(start)
-	fmt.Println("Availability collection duration: ", elapsed.Seconds())
+	//elapsed = time.Since(start)
+	//fmt.Println("Availability collection duration: ", elapsed.Seconds())
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
 	var inputsPerNodeArray [][]string = make([][]string, len(availableNodes))
@@ -129,7 +117,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	// --------- STEP ----------
 	// wait for all computations to conclude
 	println("Waiting for computation to finish")
-	start = time.Now()
+	//start = time.Now()
 	remoteComputationsResults := <-computationConclusionChannel
 	println("All computation is done")
 
@@ -137,12 +125,12 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	for _, input := range inputData {
 		sb.WriteString(input + " " + remoteComputationsResults[input] + "\n")
 	}
-	elapsed = time.Since(start)
-	fmt.Println("Pure execution duration: ", elapsed.Seconds())
+	//elapsed = time.Since(start)
+	//fmt.Println("Pure execution duration: ", elapsed.Seconds())
 
 	// --------- STEP -------
 	// calculate the cost of the total operation and how much to send to everyone
-	start = time.Now()
+	//start = time.Now()
 	costMap := make(map[string]float64)
 	totalCostTruncated := float64(int(totalCost*1000)) / 1000
 
@@ -160,8 +148,8 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 		return nil, err
 	}
 
-	elapsed = time.Since(start)
-	fmt.Println("Paxos duration: ", elapsed.Seconds())
+	//elapsed = time.Since(start)
+	//fmt.Println("Paxos duration: ", elapsed.Seconds())
 
 	return []byte(sb.String()), nil
 }

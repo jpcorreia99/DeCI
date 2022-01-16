@@ -14,8 +14,6 @@ func (n *node) JoinMessageCallback(msg types.Message, pkt transport.Packet) erro
 
 	joiningNodeAddress := joinMsg.Message
 
-	//fmt.Printf("At %v, received join message from %v \n", n.socket.GetAddress(), joiningNodeAddress)
-
 	if n.peerMap.contains(joiningNodeAddress) {
 		return nil
 	}
@@ -23,8 +21,6 @@ func (n *node) JoinMessageCallback(msg types.Message, pkt transport.Packet) erro
 	n.configuration.TotalPeers.Increase()
 
 	n.peerMap.add(joiningNodeAddress)
-
-	n.AddPeer(joiningNodeAddress)
 
 	ackJoinMsg := types.AckJoinMessage{
 		Message: n.socket.GetAddress(),
@@ -58,15 +54,12 @@ func (n *node) AckJoinMessageCallback(msg types.Message, pkt transport.Packet) e
 	}
 
 	ackJoiningNodeAddress := ackJoinMsg.Message
-	//fmt.Printf("At %v, received ACK join message from %v \n", n.socket.GetAddress(), ackJoiningNodeAddress)
 
 	if !n.joinAckMap.contains(ackJoiningNodeAddress) {
 		n.joinAckMap.add(ackJoiningNodeAddress)
 	} else {
 		println("Already received ack from this peer")
 	}
-
-	//fmt.Printf("New ack map size : %v and total peers %v\n", n.joinAckMap.getSize(), n.configuration.TotalPeers.Get())
 
 	if n.joinAckMap.getSize() > int(n.configuration.TotalPeers.Get()) {
 		println("Updating number of total peers!")

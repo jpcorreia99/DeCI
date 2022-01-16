@@ -33,10 +33,12 @@ func (n *node) JoinNetwork(knownNeighbourAddress string) error {
 	return nil
 }
 
+// a bit out of place but c'est la vie
 func (n *node) GetAddress() string {
 	return n.socket.GetAddress()
 }
 
+// c'est la vie x2
 func (n *node) GetBudget() float64 {
 	return n.localBudget
 }
