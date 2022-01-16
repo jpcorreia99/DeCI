@@ -79,7 +79,7 @@ func main() {
 		fmt.Printf("New budget: %v\n", myNode.GetBudget())
 
 		if err2 != nil {
-			println(err2)
+			fmt.Println(err2)
 			return
 		}
 
@@ -89,19 +89,20 @@ func main() {
 
 		if *resultPath != "" {
 			file, err := os.Create(*resultPath)
+			defer file.Close()
 
-			if err != nil {
-				fmt.Println(err)
-			} else {
-				file.WriteString(resString)
-			}
-			err = file.Close()
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
+
+			_, err = file.WriteString(resString)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Println("Saved result in", *resultPath)
 		}
-		println("Done!")
 
 	} else {
 		println("Sleeping and making money")

@@ -38,15 +38,12 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 
 	inputData := splitData(inputs)
 	costPerUnit, alreadyCalculatedResults, err := estimateCost(filename, executionArgs, inputData)
-	//println("Cost per sample: ", costPerUnit)
 	if err != nil {
-		println("ERROR ", err)
 		return nil, err
 	}
 
 	totalCost := costPerUnit*float64(len(inputData)-len(alreadyCalculatedResults)) + float64(numberOfRequestedNodes)
 	if totalCost > n.localBudget {
-		println("ERROR no budget")
 		return nil, xerrors.Errorf("Total operation cost above available budget %v - %v", totalCost, n.localBudget)
 	}
 
@@ -96,6 +93,7 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	availableNodes := n.computationManager.getAvailableNodes(requestID)
 	//elapsed = time.Since(start)
 	//fmt.Println("Availability collection duration: ", elapsed.Seconds())
+
 	// --------- STEP ----------
 	// divide the work among the proposed nodes and send them computation orders
 	var inputsPerNodeArray [][]string = make([][]string, len(availableNodes))
@@ -144,7 +142,6 @@ func (n *node) Compute(executable []byte, executionArgs []string, fileExtension 
 	fmt.Println("Starting budget update...")
 	err = n.UpdateBudget(requestID, costMap)
 	if err != nil {
-		fmt.Printf("Something went wrong when updating the budger, error : %v\n", err)
 		return nil, err
 	}
 
@@ -162,8 +159,7 @@ func saveExecutable(executable []byte, extension string) (string, error) {
 	filename := EXECUTABLE_LOCATION + strconv.FormatInt(timestamp, 10) + extension
 	file, err := os.Create(filename)
 	defer file.Close()
-	// len variable captures the length
-	// of the string written to the file.
+
 	_, err = file.WriteString(code)
 	if err != nil {
 		return "", err

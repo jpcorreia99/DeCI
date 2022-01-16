@@ -18,7 +18,6 @@ def block_func(combination):
     if digest == hash:
         return password
 
-# all the possible characters0f5d1b1cf3f14bfab39d1b83ffb8e3aa
 charset = "0123456789"
 
 
