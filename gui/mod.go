@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/rs/xid"
@@ -9,293 +8,110 @@ import (
 	"go.dedis.ch/cs438/peer/impl"
 	"go.dedis.ch/cs438/registry/standard"
 	"go.dedis.ch/cs438/storage/inmemory"
-	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/transport/udp"
-	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
 	"os"
-	"strconv"
 	"time"
 )
 
-var count = uint(0)
-var centralNodeAddress = "127.0.0.1:12345"
-var totalNumberOfPeers = 11
-
-func main2() {
-
+func main() {
 	isCentral := flag.Bool("central", false, "Create a central node.")
-	//address := flag.String("address", "127.0.0.1:0", "Create a node with a specific address.")
+	address := flag.String("address", "127.0.0.1:0", "Create a node with a specific address.")
+	data := flag.String("data", "", "Path to data file.")
+	code := flag.String("code", "", "Path to code file.")
+	resultPath := flag.String("result", "", "Path to result file.")
+	nodes := flag.Uint("nodes", 0, "Number of requested computation nodes.")
+
 	flag.Parse()
 
 	if *isCentral {
-		fmt.Printf("Creating central node at address: %s\n", centralNodeAddress)
-		centralNode := createPeer(centralNodeAddress)
+		centralNode := createPeer("127.0.0.1:12345")
+		fmt.Printf("Created central node at address: %s\n", centralNode.GetAddress())
 		err := centralNode.Start()
+		defer centralNode.Stop()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		select {}
-		//err = centralNode.Stop()
-		//if err != nil {
-		//	fmt.Println(err)
-		//	return
-		//}
+		time.Sleep(time.Hour)
 	}
 
-	node1 := createPeer("127.0.0.1:0")
-	node2 := createPeer("127.0.0.1:0")
+	myNode := createPeer(*address)
 
-	//node1.AddPeer()
-
-	err := node1.Start()
+	err := myNode.Start()
+	defer myNode.Stop()
 	if err != nil {
-		fmt.Println(err)
+		println(err)
 		return
 	}
 
-	err = node2.Start()
+	fmt.Printf("Created a node at address %v\n", myNode.GetAddress())
+
+	myNode.AddPeer("127.0.0.1:12345")
+
+	err = myNode.JoinNetwork("127.0.0.1:12345")
+
+	println("Joined the network!")
+
 	if err != nil {
-		fmt.Println(err)
+		println(err)
 		return
 	}
 
-	computationID := xid.New().String()
+	if *data != "" && *code != "" && *nodes != 0 {
 
-	fmt.Printf("Issuing new computation with ID %v\n", computationID)
+		dataRead, err := os.ReadFile(*data)
+		if err != nil {
+			println(err)
+			return
+		}
 
-	participantAmountMap := make(map[string]int)
-	participantAmountMap["42"] = 1
-	participantAmountMap["69"] = 2
+		codeRead, err := os.ReadFile(*code)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 
-	s := encodeMapToString(participantAmountMap)
+		fmt.Printf("Current budget: %v\n", myNode.GetBudget())
+		println("Sending computation!")
+		res, err2 := myNode.Compute(codeRead, []string{"python"}, ".py", dataRead, *nodes)
+		fmt.Printf("New budget: %v\n", myNode.GetBudget())
 
-	err = node1.Tag(computationID, s)
+		if err2 != nil {
+			fmt.Println(err2)
+			return
+		}
 
-	err = node1.Stop()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("closed")
+		resString := string(res)
 
-	//s := encodeMapToString(participantAmountMap)
-	//
-	//
-	//decodeMap := make(map[string]int)
-	//
-	//err := json.Unmarshal([]byte(s), &decodeMap)
-	//
-	//if err != nil {
-	//	fmt.Printf("Error %v\n", err)
-	//}
-	//println("All good")
-	//my := 17
-	//for key, value := range decodeMap {
-	//	if key == "42"{
-	//		my -= value
-	//	}
-	//}
-	//
-	//fmt.Printf("My : %v\n", my)
-}
+		fmt.Printf("Result:\n%v\n", resString)
 
-func main() {
-	var nodeList []peer.Peer
-	for i := 0; i < totalNumberOfPeers; i++ {
-		address := 11110
-		stringAddress := "127.0.0.1:" + strconv.Itoa(address+i)
-		peerNode := createPeer(stringAddress)
-		defer peerNode.Stop()
-		nodeList = append(nodeList, peerNode)
-	}
+		if *resultPath != "" {
+			file, err := os.Create(*resultPath)
+			defer file.Close()
 
-	for i := 0; i < totalNumberOfPeers; i++ {
-		for j := 0; j < totalNumberOfPeers; j++ {
-			if i != j {
-				address := 11110
-				stringAddress := "127.0.0.1:" + strconv.Itoa(address+j)
-				nodeList[i].AddPeer(stringAddress)
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
+
+			_, err = file.WriteString(resString)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			fmt.Println("Saved result in", *resultPath)
 		}
+
+	} else {
+		println("Sleeping and making money")
+		time.Sleep(time.Second * 600)
 	}
 
-	for i := 0; i < totalNumberOfPeers; i++ {
-		err := nodeList[i].Start()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-
-	code, err := os.ReadFile("samples/dupper.py")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	data, err := os.ReadFile("samples/numbers.txt")
-
-	start := time.Now()
-	_, err = nodeList[0].Compute(code, []string{"python"}, ".py", data, 10)
-	//_, err = nodeList[0].Compute(code, []string{"go", "run"}, ".go", data, 10)
-
-	elapsed := time.Since(start)
-	fmt.Println("duration: ", elapsed.Seconds())
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	/*for i := 0; i < totalNumberOfPeers; i++ {
-		fmt.Println("closing ", i)
-		err := nodeList[i].Stop()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}*/
 }
-func main3() {
-	node1 := createPeer("127.0.0.1:12345")
-	node2 := createPeer("127.0.0.1:54321")
-	node3 := createPeer("127.0.0.1:55555")
-	node4 := createPeer("127.0.0.1:11111")
-
-	/*
-					    4    -  6
-		             /     \  /
-		    		1		3
-		             \	   /
-		   \			2
-	*/
-	node1.AddPeer("127.0.0.1:54321") // 1 -> 2
-	node2.AddPeer("127.0.0.1:12345") // 2 -> 1
-	node2.AddPeer("127.0.0.1:55555") // 2 -> 3
-	node3.AddPeer("127.0.0.1:54321") // 3 -> 2
-	node1.AddPeer("127.0.0.1:1111")  // 1 -> 4
-	node3.AddPeer("127.0.0.1:1111")  // 3 -> 4
-	node4.AddPeer("127.0.0.1:12345") // 4 -> 1
-	node4.AddPeer("127.0.0.1:55555") // 4 -> 3
-
-	err := node1.Start()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = node2.Start()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = node3.Start()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = node4.Start()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	chat := types.ChatMessage{
-		Message: "Hello from node 1",
-	}
-
-	buf, err := json.Marshal(&chat)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	chatMsg := transport.Message{
-		Type:    chat.Name(),
-		Payload: buf,
-	}
-	err = node1.Broadcast(chatMsg)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	code, err := os.ReadFile("executables/cracker.py")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	data, err := os.ReadFile("executables/data.txt")
-
-	_, err = node2.Compute(code, []string{"python"}, ".py", data, 3)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = node1.Stop()
-	fmt.Println("a")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("b")
-	err = node2.Stop()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("c")
-	err = node3.Stop()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println("d")
-	err = node4.Stop()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println("closed")
-}
-
-func encodeMapToString(participantAmountMap map[string]int) string {
-	s := "{"
-	for key, val := range participantAmountMap {
-		// Convert each key/value pair in m to a string
-		temp := fmt.Sprintf("\"%s\" : %v,", key, val)
-		// Do whatever you want to do with the string;
-		// in this example I just print out each of them.
-		s += temp
-	}
-	s = s[:len(s)-1] + "}"
-
-	fmt.Printf("The encoded string %v\n", s)
-
-	return s
-}
-
-//func decodeMapFromString(s string) (map[string]int, error){
-//	decodedMap := make(map[string]int)
-//
-//	err := json.Unmarshal([]byte(s), &decodedMap)
-//
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return decodedMap, nil
-//}
 
 func createPeer(address string) peer.Peer {
-	count++
 	var peerFactory = impl.NewPeer
 
 	trans := udp.NewUDP()
@@ -328,11 +144,11 @@ func createPeer(address string) peer.Peer {
 		},
 		Storage: storage,
 
-		TotalPeers: uint(totalNumberOfPeers),
+		TotalPeers: peer.NewConcurrentUint(uint(1)),
 		PaxosThreshold: func(u uint) int {
 			return int(u/2 + 1)
 		},
-		PaxosID:            count,
+		PaxosID:            uint(xid.New().Counter()),
 		PaxosProposerRetry: 7 * time.Second,
 		InitialBudget:      100,
 	}

@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto"
+	_ "crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -43,9 +44,9 @@ type paxosProposerProcessingStructure struct {
 func newPaxosProposerProcessingStructure(configuration peer.Configuration) *paxosProposerProcessingStructure {
 	return &paxosProposerProcessingStructure{
 		phase:                   1,
-		numberOfPeers:           configuration.TotalPeers,
+		numberOfPeers:           configuration.TotalPeers.Get(),
 		currentID:               configuration.PaxosID,
-		threshold:               uint(configuration.PaxosThreshold(configuration.TotalPeers)),
+		threshold:               uint(configuration.PaxosThreshold(configuration.TotalPeers.Get())),
 		promiseCount:            0,
 		promiseThresholdChannel: make(chan types.PaxosValue, 1),
 		highestCollectedValue:   types.PaxosValue{},
@@ -76,7 +77,7 @@ func newPaxosController(configuration peer.Configuration) *paxosController {
 		active:                           false,
 		step:                             0,
 		IsProposer:                       false,
-		threshold:                        uint(configuration.PaxosThreshold(configuration.TotalPeers)),
+		threshold:                        uint(configuration.PaxosThreshold(configuration.TotalPeers.Get())),
 		paxosAcceptorProcessingStructure: newPaxosAcceptorProcessingStructure(),
 		paxosProposerProcessingStructure: newPaxosProposerProcessingStructure(configuration),
 		valueMap:                         make(map[types.PaxosValue]uint),
@@ -221,10 +222,10 @@ func (pc *paxosController) addBlock(block types.BlockchainBlock, peer *node) err
 
 	if ok {
 		peer.localBudget += computationCost // I expect the computation cost to be negative if I started the computation
-		fmt.Printf("At %v, received computation with ID %v, I am a participant, updating my budget to %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
-	} else {
-		fmt.Printf("At %v, received computation with ID %v, I am not a participant, my budget is %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
-	}
+		fmt.Printf("At %v, performed computation with ID %v, I am a participant, updating my budget to %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
+	} //} else {
+	//	fmt.Printf("At %v, received computation with ID %v, I am not a participant, my budget is %v\n", peer.socket.GetAddress(), block.Value.UniqID, peer.localBudget)
+	//}
 
 	return nil
 }

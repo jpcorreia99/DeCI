@@ -18,7 +18,7 @@ func (n *node) Tag(name string, mh string) error {
 		return xerrors.Errorf("Name %v is already in the naming store", name)
 	}
 
-	if n.configuration.TotalPeers <= 1 {
+	if n.configuration.TotalPeers.Get() <= 1 {
 		namingStore.Set(name, []byte(mh))
 		return nil
 	}
@@ -46,7 +46,7 @@ func (n *node) Tag(name string, mh string) error {
 			}
 		}
 
-		// execute phase 1 and get which should the value to propose
+		// execute phase 1 and Get which should the value to propose
 		valueToPropose, err := n.paxosPhase1(name, mh)
 		if err != nil || valueToPropose == nil { // second part of condition only for when the node is shut down
 			return err

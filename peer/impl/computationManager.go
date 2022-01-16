@@ -169,7 +169,6 @@ func (cm *computationManager) createAvailabilityChannel(requestID string, number
 	return availabilityChannel
 }
 
-// todo: if we want to be extra safe we can ensure the results we get are from the node which is supposed to have sent them
 func (cm *computationManager) storeResults(requestID string, results map[string]string) {
 	cm.mutex.Lock()
 	defer cm.mutex.Unlock()

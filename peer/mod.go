@@ -66,7 +66,7 @@ type Configuration struct {
 	// TotalPeers is the total number of peers in Peerster. If it is <= 1 then
 	// there is no use of Paxos/TLC/Blockchain.
 	// Default: 1
-	TotalPeers uint
+	TotalPeers *ConcurrentUint
 
 	// PaxosThreshold is a function that return the threshold of peers needed to
 	// have a consensus. Default value is N/2 + 1

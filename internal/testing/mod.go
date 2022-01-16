@@ -313,7 +313,7 @@ func NewTestNode(t *testing.T, f peer.Factory, trans transport.Transport,
 	config.Storage = template.storage
 	config.ChunkSize = template.chunkSize
 	config.BackoffDataRequest = template.dataRequestBackoff
-	config.TotalPeers = template.totalPeers
+	config.TotalPeers = peer.NewConcurrentUint(template.totalPeers)
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
@@ -350,6 +350,10 @@ type TestNode struct {
 // GetAddr returns the node's socket address
 func (t *TestNode) GetAddr() string {
 	return t.socket.GetAddress()
+}
+
+func (t *TestNode) GetTotalPeers() uint {
+	return t.config.TotalPeers.Get()
 }
 
 // StopAll stops the peer and socket.
