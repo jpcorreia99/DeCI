@@ -104,9 +104,12 @@ func main() {
 			fmt.Println("Saved result in", *resultPath)
 		}
 
+		fmt.Println("Now participanting in the network as a collaborative peer")
+		time.Sleep(time.Hour) // can be changed to infinity
+
 	} else {
 		println("Sleeping and making money")
-		time.Sleep(time.Second * 600)
+		time.Sleep(time.Hour) // can be changed to infinity
 	}
 
 }
